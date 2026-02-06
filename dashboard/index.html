@@ -4,17 +4,33 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MiniRAG Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <link rel="stylesheet" href="/dashboard/css/app.css">
   <script src="/dashboard/js/api.js"></script>
   <script src="/dashboard/js/app.js"></script>
+  <script>
+    // Chart.js dark theme defaults
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.Chart) {
+        Chart.defaults.color = 'rgba(255, 255, 255, 0.5)';
+        Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.06)';
+      }
+    });
+  </script>
   <style>
     [x-cloak] { display: none !important; }
   </style>
 </head>
-<body class="bg-gray-50 text-gray-900 antialiased" x-data="dashboard()" x-cloak>
+<body class="antialiased" x-data="dashboard()" x-cloak>
+
+  <!-- Animated gradient mesh background -->
+  <div class="bg-mesh"><div class="bg-orb"></div></div>
 
   <!-- ═══ Toast ═══════════════════════════════════════════════ -->
   <div x-show="$store.toast.visible"
@@ -28,16 +44,15 @@
 
   <!-- ═══ Login Page ═════════════════════════════════════════ -->
   <template x-if="!$store.auth.isLoggedIn">
-    <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-4">
-      <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+    <div class="login-page" x-init="$nextTick(() => { if (window.lucide) lucide.createIcons() })">
+      <div class="glass-card-static login-card">
         <div class="text-center mb-8">
-          <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-100 mb-4">
-            <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
-            </svg>
+          <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
+               style="background: rgba(139,92,246,0.15); border: 1px solid rgba(139,92,246,0.25);">
+            <i data-lucide="message-circle" class="w-8 h-8" style="color: #a78bfa;"></i>
           </div>
-          <h1 class="text-2xl font-bold text-gray-900">MiniRAG</h1>
-          <p class="text-sm text-gray-500 mt-1">Sign in to your dashboard</p>
+          <h1 class="text-2xl font-bold text-white">MiniRAG</h1>
+          <p class="text-sm mt-1" style="color: rgba(255,255,255,0.45);">Sign in to your dashboard</p>
         </div>
         <form @submit.prevent="doLogin" class="space-y-4">
           <div>
@@ -48,7 +63,7 @@
             <label class="form-label">Password</label>
             <input type="password" x-model="loginForm.password" class="form-input" placeholder="********" required>
           </div>
-          <div x-show="loginError" class="text-sm text-red-600" x-text="loginError"></div>
+          <div x-show="loginError" class="text-sm" style="color: #fb7185;" x-text="loginError"></div>
           <button type="submit" class="btn-primary w-full" :disabled="loginLoading">
             <span x-show="!loginLoading">Sign In</span>
             <span x-show="loginLoading" class="flex items-center justify-center gap-2">
@@ -62,20 +77,19 @@
 
   <!-- ═══ Authenticated Layout ═══════════════════════════════ -->
   <template x-if="$store.auth.isLoggedIn">
-    <div class="flex">
+    <div class="app-wrapper flex" x-init="$nextTick(() => { if (window.lucide) lucide.createIcons() })">
       <!-- Sidebar -->
-      <aside class="sidebar bg-gray-900 text-gray-300 flex flex-col fixed top-0 left-0 h-screen"
+      <aside class="sidebar flex flex-col fixed top-0 left-0 h-screen"
              :class="{ 'open': sidebarOpen }">
-        <div class="p-5 border-b border-gray-800">
+        <div class="p-5" style="border-bottom: 1px solid rgba(255,255,255,0.06);">
           <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center">
-              <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
-              </svg>
+            <div class="w-9 h-9 rounded-lg flex items-center justify-center"
+                 style="background: rgba(139,92,246,0.15); border: 1px solid rgba(139,92,246,0.25);">
+              <i data-lucide="message-circle" class="w-5 h-5" style="color: #a78bfa;"></i>
             </div>
             <div>
               <div class="font-bold text-white text-sm">MiniRAG</div>
-              <div class="text-xs text-gray-500" x-text="$store.auth.tenant?.name"></div>
+              <div class="text-xs" style="color: rgba(255,255,255,0.35);" x-text="$store.auth.tenant?.name"></div>
             </div>
           </div>
         </div>
@@ -83,21 +97,22 @@
         <nav class="flex-1 py-4 space-y-1 px-3 overflow-y-auto">
           <template x-for="item in navItems" :key="item.page">
             <button @click="page = item.page; sidebarOpen = false"
-                    :class="page === item.page ? 'bg-gray-800 text-white' : 'hover:bg-gray-800/50'"
-                    class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors">
-              <span x-html="item.icon" class="w-5 h-5 opacity-70"></span>
+                    :class="page === item.page ? 'active' : ''"
+                    class="nav-item">
+              <i :data-lucide="item.icon" class="nav-icon"></i>
               <span x-text="item.label"></span>
             </button>
           </template>
         </nav>
 
-        <div class="p-4 border-t border-gray-800">
+        <div class="p-4" style="border-top: 1px solid rgba(255,255,255,0.06);">
           <div class="flex items-center gap-3 mb-3">
-            <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold"
+            <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                 style="background: rgba(139,92,246,0.5);"
                  x-text="($store.auth.user?.email || '?')[0].toUpperCase()"></div>
             <div class="flex-1 min-w-0">
               <div class="text-sm text-white truncate" x-text="$store.auth.user?.display_name || $store.auth.user?.email"></div>
-              <div class="text-xs text-gray-500" x-text="$store.auth.user?.role"></div>
+              <div class="text-xs" style="color: rgba(255,255,255,0.35);" x-text="$store.auth.user?.role"></div>
             </div>
           </div>
           <button @click="$store.auth.logout(); page = 'overview'" class="btn-secondary w-full btn-sm">
@@ -108,10 +123,8 @@
 
       <!-- Mobile hamburger -->
       <button @click="sidebarOpen = !sidebarOpen"
-              class="lg:hidden fixed top-4 left-4 z-50 p-2 bg-gray-900 text-white rounded-lg">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-        </svg>
+              class="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg glass-dark text-white">
+        <i data-lucide="menu" class="w-5 h-5"></i>
       </button>
 
       <!-- Main content area -->
@@ -124,11 +137,11 @@
           <!-- Health cards -->
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8" x-show="health">
             <template x-for="[key, val] in Object.entries(health?.postgres ? {postgres: health.postgres, qdrant: health.qdrant, redis: health.redis} : {})" :key="key">
-              <div class="stat-card bg-white rounded-xl p-4 shadow-sm border">
+              <div class="stat-card p-4">
                 <div class="flex items-center justify-between">
-                  <span class="text-sm font-medium text-gray-500 capitalize" x-text="key"></span>
-                  <span :class="val.status === 'ok' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
-                        class="px-2 py-0.5 rounded-full text-xs font-medium" x-text="val.status"></span>
+                  <span class="text-sm font-medium capitalize" style="color: rgba(255,255,255,0.5);" x-text="key"></span>
+                  <span :class="val.status === 'ok' ? 'badge-ready' : 'badge-error'"
+                        class="badge" x-text="val.status"></span>
                 </div>
               </div>
             </template>
@@ -136,20 +149,20 @@
 
           <!-- Summary stats -->
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8" x-show="stats">
-            <div class="stat-card bg-white rounded-xl p-5 shadow-sm border">
-              <div class="text-sm text-gray-500">Bot Profiles</div>
+            <div class="stat-card p-5">
+              <div class="text-sm" style="color: rgba(255,255,255,0.5);">Bot Profiles</div>
               <div class="text-2xl font-bold mt-1" x-text="stats?.bot_profiles ?? '—'"></div>
             </div>
-            <div class="stat-card bg-white rounded-xl p-5 shadow-sm border">
-              <div class="text-sm text-gray-500">Sources</div>
+            <div class="stat-card p-5">
+              <div class="text-sm" style="color: rgba(255,255,255,0.5);">Sources</div>
               <div class="text-2xl font-bold mt-1" x-text="stats?.sources ?? '—'"></div>
             </div>
-            <div class="stat-card bg-white rounded-xl p-5 shadow-sm border">
-              <div class="text-sm text-gray-500">Chats</div>
+            <div class="stat-card p-5">
+              <div class="text-sm" style="color: rgba(255,255,255,0.5);">Chats</div>
               <div class="text-2xl font-bold mt-1" x-text="stats?.chats ?? '—'"></div>
             </div>
-            <div class="stat-card bg-white rounded-xl p-5 shadow-sm border">
-              <div class="text-sm text-gray-500">Total Tokens</div>
+            <div class="stat-card p-5">
+              <div class="text-sm" style="color: rgba(255,255,255,0.5);">Total Tokens</div>
               <div class="text-2xl font-bold mt-1" x-text="(stats?.total_tokens ?? 0).toLocaleString()"></div>
             </div>
           </div>
@@ -173,17 +186,17 @@
           <!-- Bot cards -->
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <template x-for="bot in bots" :key="bot.id">
-              <div class="bg-white rounded-xl p-5 shadow-sm border hover:shadow-md transition-shadow">
+              <div class="glass-card p-5">
                 <div class="flex items-start justify-between mb-3">
                   <div>
-                    <h3 class="font-semibold" x-text="bot.name"></h3>
-                    <p class="text-xs text-gray-500 mt-0.5" x-text="bot.model"></p>
+                    <h3 class="font-semibold text-white" x-text="bot.name"></h3>
+                    <p class="text-xs mt-0.5" style="color: rgba(255,255,255,0.4);" x-text="bot.model"></p>
                   </div>
-                  <span :class="bot.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'"
-                        class="px-2 py-0.5 rounded-full text-xs" x-text="bot.is_active ? 'Active' : 'Inactive'"></span>
+                  <span :class="bot.is_active ? 'badge-ready' : 'badge-member'"
+                        class="badge" x-text="bot.is_active ? 'Active' : 'Inactive'"></span>
                 </div>
-                <p class="text-sm text-gray-600 mb-3 line-clamp-2" x-text="bot.description || 'No description'"></p>
-                <div class="text-xs text-gray-400 mb-3" x-text="'Temp: ' + bot.temperature + ' | Max tokens: ' + (bot.max_tokens || 'default')"></div>
+                <p class="text-sm mb-3 line-clamp-2" style="color: rgba(255,255,255,0.55);" x-text="bot.description || 'No description'"></p>
+                <div class="text-xs mb-3" style="color: rgba(255,255,255,0.3);" x-text="'Temp: ' + bot.temperature + ' | Max tokens: ' + (bot.max_tokens || 'default')"></div>
                 <div class="flex gap-2">
                   <button @click="editBot(bot)" class="btn-secondary btn-sm">Edit</button>
                   <button @click="tryBot(bot)" class="btn-success btn-sm">Try It</button>
@@ -250,23 +263,23 @@
           </div>
 
           <!-- Try It chat panel -->
-          <div x-show="tryingBot" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          <div x-show="tryingBot" class="modal-backdrop"
                @click.self="tryingBot = null">
-            <div class="bg-white rounded-xl shadow-2xl w-full max-w-xl">
-              <div class="flex items-center justify-between p-4 border-b">
+            <div class="modal-content" style="max-width: 36rem;">
+              <div class="flex items-center justify-between p-4" style="border-bottom: 1px solid rgba(255,255,255,0.08);">
                 <h3 class="font-bold" x-text="'Chat with ' + (tryingBot?.name || '')"></h3>
-                <button @click="tryingBot = null; tryChatId = null; tryMessages = []" class="text-gray-400 hover:text-gray-600">&times;</button>
+                <button @click="tryingBot = null; tryChatId = null; tryMessages = []" class="modal-close">&times;</button>
               </div>
-              <div class="chat-inline border-0">
+              <div class="chat-inline">
                 <div class="chat-messages" x-ref="tryChatMessages">
                   <template x-for="msg in tryMessages" :key="msg.id || msg.content">
                     <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
-                      <div :class="msg.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-800'"
-                           class="max-w-[80%] px-4 py-2 rounded-2xl text-sm whitespace-pre-wrap" x-text="msg.content"></div>
+                      <div :class="msg.role === 'user' ? 'chat-bubble-user' : 'chat-bubble-bot'"
+                           x-text="msg.content"></div>
                     </div>
                   </template>
                   <div x-show="trySending" class="flex justify-start">
-                    <div class="bg-gray-100 px-4 py-2 rounded-2xl"><span class="spinner"></span></div>
+                    <div class="chat-bubble-bot"><span class="spinner"></span></div>
                   </div>
                 </div>
                 <div class="chat-input-bar">
@@ -286,7 +299,7 @@
             <button @click="showCreate = true" class="btn-primary">+ New Source</button>
           </div>
 
-          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div class="glass-table-wrap">
             <table class="data-table">
               <thead><tr>
                 <th>Name</th><th>Type</th><th>Status</th><th>Chunks</th><th>Created</th><th></th>
@@ -294,11 +307,11 @@
               <tbody>
                 <template x-for="src in sources" :key="src.id">
                   <tr>
-                    <td class="font-medium" x-text="src.name"></td>
-                    <td><span class="badge bg-gray-100 text-gray-700" x-text="src.source_type"></span></td>
+                    <td class="font-medium text-white" x-text="src.name"></td>
+                    <td><span class="badge badge-member" x-text="src.source_type"></span></td>
                     <td><span :class="'badge badge-' + src.status" x-text="src.status"></span></td>
                     <td x-text="src.chunk_count"></td>
-                    <td class="text-gray-500 text-xs" x-text="formatDate(src.created_at)"></td>
+                    <td class="text-xs" style="color: rgba(255,255,255,0.4);" x-text="formatDate(src.created_at)"></td>
                     <td class="text-right space-x-1">
                       <button @click="ingest(src)" class="btn-success btn-sm"
                               :disabled="src.status === 'processing'">Ingest</button>
@@ -360,7 +373,7 @@
         <div x-show="page === 'chats'" x-data="chatsPage()" x-init="load()">
           <h2 class="text-2xl font-bold mb-6">Chat History</h2>
 
-          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div class="glass-table-wrap">
             <table class="data-table">
               <thead><tr>
                 <th>Title</th><th>Messages</th><th>Tokens</th><th>Created</th><th></th>
@@ -368,10 +381,10 @@
               <tbody>
                 <template x-for="c in chats" :key="c.id">
                   <tr>
-                    <td class="font-medium" x-text="truncate(c.title, 50)"></td>
+                    <td class="font-medium text-white" x-text="truncate(c.title, 50)"></td>
                     <td x-text="c.message_count"></td>
                     <td x-text="(c.total_prompt_tokens + c.total_completion_tokens).toLocaleString()"></td>
-                    <td class="text-gray-500 text-xs" x-text="formatDate(c.created_at)"></td>
+                    <td class="text-xs" style="color: rgba(255,255,255,0.4);" x-text="formatDate(c.created_at)"></td>
                     <td class="text-right">
                       <button @click="viewChat(c)" class="btn-secondary btn-sm">View</button>
                     </td>
@@ -385,15 +398,15 @@
           <!-- Chat detail modal -->
           <div x-show="selectedChat" class="modal-backdrop" @click.self="selectedChat = null; messages = []">
             <div class="modal-content" style="max-width:600px;">
-              <div class="p-4 border-b flex items-center justify-between">
+              <div class="p-4 flex items-center justify-between" style="border-bottom: 1px solid rgba(255,255,255,0.08);">
                 <h3 class="font-bold" x-text="selectedChat?.title"></h3>
-                <button @click="selectedChat = null; messages = []" class="text-gray-400 hover:text-gray-600">&times;</button>
+                <button @click="selectedChat = null; messages = []" class="modal-close">&times;</button>
               </div>
               <div class="p-4 space-y-3 max-h-96 overflow-y-auto">
                 <template x-for="m in messages" :key="m.id">
                   <div :class="m.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
-                    <div :class="m.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-800'"
-                         class="max-w-[80%] px-4 py-2 rounded-2xl text-sm whitespace-pre-wrap" x-text="m.content"></div>
+                    <div :class="m.role === 'user' ? 'chat-bubble-user' : 'chat-bubble-bot'"
+                         x-text="m.content"></div>
                   </div>
                 </template>
               </div>
@@ -409,15 +422,15 @@
           </div>
 
           <!-- Newly created token banner -->
-          <div x-show="newToken" class="bg-green-50 border border-green-200 rounded-xl p-4 mb-6">
-            <p class="text-sm text-green-800 font-medium mb-2">Token created! Copy it now — it won't be shown again.</p>
+          <div x-show="newToken" class="alert-success mb-6">
+            <p class="text-sm font-medium mb-2" style="color: #34d399;">Token created! Copy it now — it won't be shown again.</p>
             <div class="flex items-center gap-2">
-              <code class="bg-white border px-3 py-1.5 rounded text-sm flex-1 overflow-x-auto" x-text="newToken"></code>
+              <code class="code-block flex-1 overflow-x-auto" x-text="newToken"></code>
               <button @click="copyToClipboard(newToken)" class="btn-primary btn-sm">Copy</button>
             </div>
           </div>
 
-          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div class="glass-table-wrap">
             <table class="data-table">
               <thead><tr>
                 <th>Name</th><th>Prefix</th><th>Active</th><th>Last Used</th><th></th>
@@ -425,10 +438,10 @@
               <tbody>
                 <template x-for="t in tokens" :key="t.id">
                   <tr>
-                    <td class="font-medium" x-text="t.name"></td>
-                    <td><code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded" x-text="t.token_prefix + '...'"></code></td>
+                    <td class="font-medium text-white" x-text="t.name"></td>
+                    <td><code class="code-inline" x-text="t.token_prefix + '...'"></code></td>
                     <td><span :class="t.is_active ? 'badge-ready' : 'badge-error'" class="badge" x-text="t.is_active ? 'Active' : 'Revoked'"></span></td>
-                    <td class="text-xs text-gray-500" x-text="formatDate(t.last_used_at)"></td>
+                    <td class="text-xs" style="color: rgba(255,255,255,0.4);" x-text="formatDate(t.last_used_at)"></td>
                     <td class="text-right">
                       <button x-show="t.is_active" @click="revoke(t)" class="btn-danger btn-sm">Revoke</button>
                     </td>
@@ -464,7 +477,7 @@
             <button x-show="$store.auth.isAdmin" @click="showCreate = true" class="btn-primary">+ New User</button>
           </div>
 
-          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div class="glass-table-wrap">
             <table class="data-table">
               <thead><tr>
                 <th>Email</th><th>Name</th><th>Role</th><th>Status</th><th></th>
@@ -472,7 +485,7 @@
               <tbody>
                 <template x-for="u in users" :key="u.id">
                   <tr>
-                    <td class="font-medium" x-text="u.email"></td>
+                    <td class="font-medium text-white" x-text="u.email"></td>
                     <td x-text="u.display_name || '—'"></td>
                     <td><span :class="'badge badge-' + u.role" x-text="u.role"></span></td>
                     <td><span :class="u.is_active ? 'badge-ready' : 'badge-error'" class="badge" x-text="u.is_active ? 'Active' : 'Disabled'"></span></td>
@@ -525,18 +538,18 @@
           <h2 class="text-2xl font-bold mb-6">Usage & Analytics</h2>
 
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <div class="bg-white rounded-xl p-5 shadow-sm border">
+            <div class="glass-card-static p-5">
               <h3 class="font-semibold mb-3">Token Usage by Day</h3>
               <canvas x-ref="dailyChart" height="200"></canvas>
             </div>
-            <div class="bg-white rounded-xl p-5 shadow-sm border">
+            <div class="glass-card-static p-5">
               <h3 class="font-semibold mb-3">Usage by Model</h3>
               <canvas x-ref="modelChart" height="200"></canvas>
             </div>
           </div>
 
           <!-- Raw data table -->
-          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div class="glass-table-wrap">
             <table class="data-table">
               <thead><tr>
                 <th>Date</th><th>Model</th><th>Requests</th><th>Prompt</th><th>Completion</th><th>Total</th>
@@ -549,7 +562,7 @@
                     <td x-text="row.request_count"></td>
                     <td x-text="row.prompt_tokens.toLocaleString()"></td>
                     <td x-text="row.completion_tokens.toLocaleString()"></td>
-                    <td class="font-medium" x-text="row.total_tokens.toLocaleString()"></td>
+                    <td class="font-medium text-white" x-text="row.total_tokens.toLocaleString()"></td>
                   </tr>
                 </template>
               </tbody>
@@ -564,32 +577,34 @@
 
           <div class="space-y-6">
             <!-- Tenant info -->
-            <div class="bg-white rounded-xl p-6 shadow-sm border">
+            <div class="glass-card-static p-6">
               <h3 class="font-semibold mb-4">Tenant Information</h3>
               <dl class="grid grid-cols-2 gap-4 text-sm">
-                <div><dt class="text-gray-500">Name</dt><dd class="font-medium" x-text="$store.auth.tenant?.name"></dd></div>
-                <div><dt class="text-gray-500">Slug</dt><dd class="font-medium" x-text="$store.auth.tenant?.slug"></dd></div>
-                <div><dt class="text-gray-500">Plan</dt><dd class="font-medium" x-text="$store.auth.tenant?.plan"></dd></div>
-                <div><dt class="text-gray-500">Status</dt>
-                  <dd><span :class="$store.auth.tenant?.is_active ? 'badge-ready' : 'badge-error'" class="badge"
+                <div><dt style="color: rgba(255,255,255,0.45);">Name</dt><dd class="font-medium mt-1" x-text="$store.auth.tenant?.name"></dd></div>
+                <div><dt style="color: rgba(255,255,255,0.45);">Slug</dt><dd class="font-medium mt-1" x-text="$store.auth.tenant?.slug"></dd></div>
+                <div><dt style="color: rgba(255,255,255,0.45);">Plan</dt><dd class="font-medium mt-1" x-text="$store.auth.tenant?.plan"></dd></div>
+                <div><dt style="color: rgba(255,255,255,0.45);">Status</dt>
+                  <dd class="mt-1"><span :class="$store.auth.tenant?.is_active ? 'badge-ready' : 'badge-error'" class="badge"
                             x-text="$store.auth.tenant?.is_active ? 'Active' : 'Disabled'"></span></dd>
                 </div>
               </dl>
             </div>
 
             <!-- System health -->
-            <div class="bg-white rounded-xl p-6 shadow-sm border">
+            <div class="glass-card-static p-6">
               <div class="flex items-center justify-between mb-4">
                 <h3 class="font-semibold">System Health</h3>
                 <button @click="checkHealth()" class="btn-secondary btn-sm">Refresh</button>
               </div>
               <div class="space-y-3" x-show="health">
                 <template x-for="[svc, info] in Object.entries(health || {})" :key="svc">
-                  <div x-show="svc !== 'status'" class="flex items-center justify-between py-2 border-b last:border-0">
+                  <div x-show="svc !== 'status'" class="flex items-center justify-between py-2" style="border-bottom: 1px solid rgba(255,255,255,0.06);">
                     <span class="capitalize font-medium text-sm" x-text="svc"></span>
                     <div class="flex items-center gap-2">
-                      <span :class="info.status === 'ok' ? 'bg-green-500' : 'bg-red-500'" class="w-2.5 h-2.5 rounded-full"></span>
-                      <span class="text-sm" x-text="info.status === 'ok' ? 'Connected' : info.detail || 'Error'"></span>
+                      <span :class="info.status === 'ok' ? 'bg-emerald-500' : 'bg-rose-500'"
+                            :style="info.status === 'ok' ? 'box-shadow: 0 0 8px rgba(16,185,129,0.5)' : 'box-shadow: 0 0 8px rgba(244,63,94,0.5)'"
+                            class="w-2.5 h-2.5 rounded-full"></span>
+                      <span class="text-sm" style="color: rgba(255,255,255,0.65);" x-text="info.status === 'ok' ? 'Connected' : info.detail || 'Error'"></span>
                     </div>
                   </div>
                 </template>
@@ -597,11 +612,11 @@
             </div>
 
             <!-- App info -->
-            <div class="bg-white rounded-xl p-6 shadow-sm border">
+            <div class="glass-card-static p-6">
               <h3 class="font-semibold mb-4">Application</h3>
               <dl class="grid grid-cols-2 gap-4 text-sm">
-                <div><dt class="text-gray-500">Version</dt><dd class="font-medium">0.1.0</dd></div>
-                <div><dt class="text-gray-500">API Docs</dt><dd><a href="/docs" target="_blank" class="text-indigo-600 hover:underline">/docs</a></dd></div>
+                <div><dt style="color: rgba(255,255,255,0.45);">Version</dt><dd class="font-medium mt-1">0.1.0</dd></div>
+                <div><dt style="color: rgba(255,255,255,0.45);">API Docs</dt><dd class="mt-1"><a href="/docs" target="_blank" class="hover:underline">/docs</a></dd></div>
               </dl>
             </div>
           </div>
@@ -624,14 +639,14 @@
         stats: null,
 
         navItems: [
-          { page: 'overview', label: 'Overview', icon: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>' },
-          { page: 'bots', label: 'Bot Profiles', icon: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>' },
-          { page: 'sources', label: 'Sources', icon: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>' },
-          { page: 'chats', label: 'Chat History', icon: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>' },
-          { page: 'tokens', label: 'API Tokens', icon: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>' },
-          { page: 'users', label: 'Users', icon: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/></svg>' },
-          { page: 'usage', label: 'Usage', icon: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>' },
-          { page: 'settings', label: 'Settings', icon: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>' },
+          { page: 'overview', label: 'Overview', icon: 'layout-dashboard' },
+          { page: 'bots', label: 'Bot Profiles', icon: 'bot' },
+          { page: 'sources', label: 'Sources', icon: 'database' },
+          { page: 'chats', label: 'Chat History', icon: 'message-square' },
+          { page: 'tokens', label: 'API Tokens', icon: 'key-round' },
+          { page: 'users', label: 'Users', icon: 'users' },
+          { page: 'usage', label: 'Usage', icon: 'bar-chart-3' },
+          { page: 'settings', label: 'Settings', icon: 'settings' },
         ],
 
         async doLogin() {
@@ -946,8 +961,10 @@
                 datasets: [{
                   label: 'Total Tokens',
                   data: dailyTotals,
-                  backgroundColor: 'rgba(79, 70, 229, 0.6)',
-                  borderRadius: 4,
+                  backgroundColor: 'rgba(139, 92, 246, 0.5)',
+                  borderColor: 'rgba(139, 92, 246, 0.8)',
+                  borderWidth: 1,
+                  borderRadius: 6,
                 }],
               },
               options: { responsive: true, plugins: { legend: { display: false } } },
@@ -961,7 +978,7 @@
           });
           const modelLabels = Object.keys(models);
           const modelValues = Object.values(models);
-          const colors = ['#4f46e5', '#06b6d4', '#f59e0b', '#ef4444', '#10b981', '#8b5cf6'];
+          const colors = ['#8b5cf6', '#06b6d4', '#f59e0b', '#f43f5e', '#10b981', '#818cf8'];
 
           if (this.modelChartInstance) this.modelChartInstance.destroy();
           const modelCtx = this.$refs.modelChart?.getContext('2d');
@@ -973,6 +990,8 @@
                 datasets: [{
                   data: modelValues,
                   backgroundColor: colors.slice(0, modelLabels.length),
+                  borderColor: 'rgba(255, 255, 255, 0.05)',
+                  borderWidth: 2,
                 }],
               },
               options: { responsive: true },
