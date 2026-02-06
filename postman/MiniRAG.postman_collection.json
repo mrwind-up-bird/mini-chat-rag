@@ -1,0 +1,1254 @@
+{
+  "info": {
+    "name": "MiniRAG API",
+    "description": "Full test collection for the MiniRAG RAG platform API.\n\n## Setup\n1. Run the \"Bootstrap Tenant\" request first — it auto-saves the token and IDs.\n2. All subsequent requests use the saved `api_token` variable automatically.\n3. Follow the numbered folder order for a complete walkthrough.\n\n## Variables\n- `base_url` — API base (default: http://localhost:8000)\n- `api_token` — Bearer token (auto-set by Bootstrap)\n- `tenant_id`, `profile_id`, `source_id`, `chat_id` — auto-set by test scripts",
+    "_postman_id": "minirag-collection-v1",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{api_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "api_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tenant_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "profile_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "source_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "chat_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "token_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "0 — Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "Verify the API is running. No authentication required."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Body contains status ok', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.status).to.eql('ok');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ],
+      "description": "Quick smoke test — no auth needed."
+    },
+    {
+      "name": "1 — Tenant Bootstrap",
+      "item": [
+        {
+          "name": "Bootstrap Tenant",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_name\": \"Acme Corp\",\n  \"tenant_slug\": \"acme\",\n  \"owner_email\": \"admin@acme.com\",\n  \"owner_password\": \"supersecret123\",\n  \"owner_display_name\": \"Admin User\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/tenants",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "tenants"]
+            },
+            "description": "Creates a new tenant, owner user, and first API token in one call.\n\nThe `api_token` in the response is shown **once** — store it securely.\n\nTest script auto-saves `api_token` and `tenant_id` to collection variables."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Response has tenant and api_token', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('tenant');",
+                  "    pm.expect(json).to.have.property('api_token');",
+                  "    pm.expect(json.tenant).to.have.property('id');",
+                  "    pm.expect(json.tenant).to.have.property('slug');",
+                  "    pm.expect(json.api_token).to.be.a('string').and.not.empty;",
+                  "});",
+                  "",
+                  "pm.test('Tenant fields are correct', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.tenant.name).to.eql('Acme Corp');",
+                  "    pm.expect(json.tenant.slug).to.eql('acme');",
+                  "    pm.expect(json.tenant.is_active).to.be.true;",
+                  "    pm.expect(json.tenant.plan).to.eql('free');",
+                  "});",
+                  "",
+                  "// Auto-save variables for subsequent requests",
+                  "var json = pm.response.json();",
+                  "pm.collectionVariables.set('api_token', json.api_token);",
+                  "pm.collectionVariables.set('tenant_id', json.tenant.id);",
+                  "console.log('Saved api_token and tenant_id');"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Bootstrap Tenant — Duplicate Slug (409)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant_name\": \"Acme Corp Duplicate\",\n  \"tenant_slug\": \"acme\",\n  \"owner_email\": \"dupe@acme.com\",\n  \"owner_password\": \"supersecret123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/tenants",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "tenants"]
+            },
+            "description": "Attempting to create a tenant with an existing slug should return 409 Conflict."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "",
+                  "pm.test('Error detail mentions slug', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.detail.toLowerCase()).to.include('slug');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Get Current Tenant",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/me",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "tenants", "me"]
+            },
+            "description": "Returns the tenant associated with the current bearer token."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Returns correct tenant', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.id).to.eql(pm.collectionVariables.get('tenant_id'));",
+                  "    pm.expect(json.slug).to.eql('acme');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Unauthenticated Request (401)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/me",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "tenants", "me"]
+            },
+            "description": "Requesting an authenticated endpoint without a bearer token should return 401 or 403."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 401 or 403', function () {",
+                  "    pm.expect([401, 403]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ],
+      "description": "Tenant lifecycle: create, verify, and error cases."
+    },
+    {
+      "name": "2 — API Tokens",
+      "item": [
+        {
+          "name": "Create API Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"CI/CD Token\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/api-tokens",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api-tokens"]
+            },
+            "description": "Create an additional API token. The `raw_token` is returned only once."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Response contains raw_token (shown once)', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('raw_token');",
+                  "    pm.expect(json.raw_token).to.be.a('string').and.not.empty;",
+                  "    pm.expect(json).to.have.property('id');",
+                  "    pm.expect(json).to.have.property('name');",
+                  "    pm.expect(json.name).to.eql('CI/CD Token');",
+                  "    pm.expect(json).to.have.property('token_prefix');",
+                  "});",
+                  "",
+                  "var json = pm.response.json();",
+                  "pm.collectionVariables.set('token_id', json.id);",
+                  "console.log('Saved token_id: ' + json.id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "List API Tokens",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/api-tokens",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api-tokens"]
+            },
+            "description": "List all active API tokens for the current tenant. Note: `raw_token` is never returned here."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Returns an array with at least 2 tokens', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json).to.be.an('array');",
+                  "    pm.expect(json.length).to.be.at.least(2);",
+                  "});",
+                  "",
+                  "pm.test('Tokens do NOT expose raw_token', function () {",
+                  "    var json = pm.response.json();",
+                  "    json.forEach(function(token) {",
+                  "        pm.expect(token).to.not.have.property('raw_token');",
+                  "        pm.expect(token).to.have.property('token_prefix');",
+                  "        pm.expect(token).to.have.property('is_active');",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Revoke API Token",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/api-tokens/{{token_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api-tokens", "{{token_id}}"]
+            },
+            "description": "Soft-delete (revoke) an API token. Uses the `token_id` saved from the Create request."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 204 No Content', function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ],
+      "description": "API token lifecycle: create, list, and revoke."
+    },
+    {
+      "name": "3 — Bot Profiles",
+      "item": [
+        {
+          "name": "Create Bot Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Support Bot\",\n  \"description\": \"Handles customer support questions\",\n  \"system_prompt\": \"You are a helpful customer support assistant for Acme Corp. Answer questions based on the provided context.\",\n  \"model\": \"gpt-4o-mini\",\n  \"temperature\": 0.7,\n  \"max_tokens\": 1024\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/bot-profiles",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "bot-profiles"]
+            },
+            "description": "Create a new bot profile (AI assistant configuration)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Bot profile fields are correct', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.name).to.eql('Support Bot');",
+                  "    pm.expect(json.model).to.eql('gpt-4o-mini');",
+                  "    pm.expect(json.temperature).to.eql(0.7);",
+                  "    pm.expect(json.max_tokens).to.eql(1024);",
+                  "    pm.expect(json.has_credentials).to.be.false;",
+                  "    pm.expect(json.is_active).to.be.true;",
+                  "    pm.expect(json).to.have.property('id');",
+                  "    pm.expect(json).to.have.property('tenant_id');",
+                  "    pm.expect(json).to.have.property('created_at');",
+                  "});",
+                  "",
+                  "var json = pm.response.json();",
+                  "pm.collectionVariables.set('profile_id', json.id);",
+                  "console.log('Saved profile_id: ' + json.id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Create Bot Profile with Credentials",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Premium Bot\",\n  \"description\": \"Uses custom API key\",\n  \"model\": \"gpt-4o\",\n  \"credentials\": {\n    \"api_key\": \"sk-test-key-12345\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/bot-profiles",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "bot-profiles"]
+            },
+            "description": "Create a bot with custom provider credentials. Credentials are encrypted at rest with Fernet and never returned in responses."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Credentials are encrypted — only has_credentials flag returned', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.has_credentials).to.be.true;",
+                  "    pm.expect(json).to.not.have.property('credentials');",
+                  "    pm.expect(json).to.not.have.property('encrypted_credentials');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "List Bot Profiles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/bot-profiles",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "bot-profiles"]
+            },
+            "description": "List all active bot profiles for the current tenant."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Returns array of bot profiles', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json).to.be.an('array');",
+                  "    pm.expect(json.length).to.be.at.least(1);",
+                  "    json.forEach(function(bp) {",
+                  "        pm.expect(bp).to.have.property('id');",
+                  "        pm.expect(bp).to.have.property('name');",
+                  "        pm.expect(bp).to.have.property('model');",
+                  "        pm.expect(bp).to.have.property('has_credentials');",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Get Bot Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/bot-profiles/{{profile_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "bot-profiles", "{{profile_id}}"]
+            },
+            "description": "Get a specific bot profile by ID."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Returns the correct bot profile', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.id).to.eql(pm.collectionVariables.get('profile_id'));",
+                  "    pm.expect(json.name).to.eql('Support Bot');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Update Bot Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated description for Support Bot\",\n  \"temperature\": 0.5\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/bot-profiles/{{profile_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "bot-profiles", "{{profile_id}}"]
+            },
+            "description": "Partially update a bot profile. Only send the fields you want to change."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Fields were updated', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.description).to.eql('Updated description for Support Bot');",
+                  "    pm.expect(json.temperature).to.eql(0.5);",
+                  "    pm.expect(json.name).to.eql('Support Bot');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Get Nonexistent Bot Profile (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/bot-profiles/00000000-0000-0000-0000-000000000000",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "bot-profiles", "00000000-0000-0000-0000-000000000000"]
+            },
+            "description": "Requesting a non-existent bot profile should return 404."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ],
+      "description": "Bot profile CRUD: create, list, get, update, and error cases."
+    },
+    {
+      "name": "4 — Sources",
+      "item": [
+        {
+          "name": "Create Source (text)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bot_profile_id\": \"{{profile_id}}\",\n  \"name\": \"Product FAQ\",\n  \"description\": \"Frequently asked questions about Acme products\",\n  \"source_type\": \"text\",\n  \"content\": \"Q: What is MiniRAG?\\nA: MiniRAG is a modular, provider-agnostic Retrieval-Augmented Generation platform with multi-tenancy support.\\n\\nQ: What LLM providers does it support?\\nA: MiniRAG uses LiteLLM, so it supports OpenAI, Anthropic, Google Gemini, and many more providers interchangeably.\\n\\nQ: How does multi-tenancy work?\\nA: Every table has a tenant_id column. All queries are automatically scoped to the authenticated tenant, ensuring complete data isolation.\\n\\nQ: What vector database does it use?\\nA: MiniRAG uses Qdrant for vector storage and similarity search.\\n\\nQ: Is the API authenticated?\\nA: Yes. All endpoints (except tenant bootstrap and health check) require a Bearer token — either an API token or a JWT.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/sources",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "sources"]
+            },
+            "description": "Create a text knowledge source linked to a bot profile."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Source fields are correct', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.name).to.eql('Product FAQ');",
+                  "    pm.expect(json.source_type).to.eql('text');",
+                  "    pm.expect(json.status).to.eql('pending');",
+                  "    pm.expect(json.bot_profile_id).to.eql(pm.collectionVariables.get('profile_id'));",
+                  "    pm.expect(json.is_active).to.be.true;",
+                  "    pm.expect(json.document_count).to.eql(0);",
+                  "    pm.expect(json.chunk_count).to.eql(0);",
+                  "});",
+                  "",
+                  "var json = pm.response.json();",
+                  "pm.collectionVariables.set('source_id', json.id);",
+                  "console.log('Saved source_id: ' + json.id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "List Sources",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/sources",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "sources"]
+            },
+            "description": "List all sources for the current tenant."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Returns array with at least 1 source', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json).to.be.an('array');",
+                  "    pm.expect(json.length).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "List Sources — Filter by Bot Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/sources?bot_profile_id={{profile_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "sources"],
+              "query": [
+                { "key": "bot_profile_id", "value": "{{profile_id}}" }
+              ]
+            },
+            "description": "List sources filtered by a specific bot profile."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('All sources belong to the bot profile', function () {",
+                  "    var json = pm.response.json();",
+                  "    var profileId = pm.collectionVariables.get('profile_id');",
+                  "    json.forEach(function(source) {",
+                  "        pm.expect(source.bot_profile_id).to.eql(profileId);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Get Source",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/sources/{{source_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "sources", "{{source_id}}"]
+            },
+            "description": "Get a specific source by ID."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Returns the correct source', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.id).to.eql(pm.collectionVariables.get('source_id'));",
+                  "    pm.expect(json.name).to.eql('Product FAQ');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Update Source",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated FAQ with more questions\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/sources/{{source_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "sources", "{{source_id}}"]
+            },
+            "description": "Partially update a source."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Description was updated', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.description).to.eql('Updated FAQ with more questions');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Trigger Ingestion",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/sources/{{source_id}}/ingest",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "sources", "{{source_id}}", "ingest"]
+            },
+            "description": "Enqueue a background ingestion job for this source.\n\nThe worker will: extract content → chunk → embed → upsert to Qdrant.\n\n**Note:** Requires the ARQ worker + Redis to be running. Returns 202 Accepted immediately."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 202 Accepted', function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});",
+                  "",
+                  "pm.test('Response confirms ingestion queued', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('status');",
+                  "    pm.expect(json).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Check Source Status After Ingest",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/sources/{{source_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "sources", "{{source_id}}"]
+            },
+            "description": "Poll the source to check ingestion status. Status will transition: pending → processing → ready (or error).\n\nRe-run this request after a few seconds to see the status change."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Source status is pending, processing, or ready', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(['pending', 'processing', 'ready', 'error']).to.include(json.status);",
+                  "});",
+                  "",
+                  "pm.test('Log current status', function () {",
+                  "    var json = pm.response.json();",
+                  "    console.log('Source status: ' + json.status + ', chunks: ' + json.chunk_count);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Create Source — Cross-Tenant Bot Profile (422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bot_profile_id\": \"00000000-0000-0000-0000-000000000000\",\n  \"name\": \"Bad Source\",\n  \"source_type\": \"text\",\n  \"content\": \"test\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/sources",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "sources"]
+            },
+            "description": "Creating a source with a bot_profile_id from another tenant (or nonexistent) should return 422."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 422', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ],
+      "description": "Source lifecycle: create, list, filter, update, ingest trigger, and error cases."
+    },
+    {
+      "name": "5 — Chat (RAG)",
+      "item": [
+        {
+          "name": "Start New Conversation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bot_profile_id\": \"{{profile_id}}\",\n  \"message\": \"What is MiniRAG and what LLM providers does it support?\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/chat",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "chat"]
+            },
+            "description": "Send a message without `chat_id` to start a new conversation. The response includes the assistant's RAG-augmented reply, retrieved context sources, and token usage.\n\n**Requires:** Source ingested + LLM API key configured (or mocked)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has correct structure', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('chat_id');",
+                  "    pm.expect(json).to.have.property('message');",
+                  "    pm.expect(json).to.have.property('sources');",
+                  "    pm.expect(json).to.have.property('usage');",
+                  "});",
+                  "",
+                  "pm.test('Message is from assistant', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.message.role).to.eql('assistant');",
+                  "    pm.expect(json.message.content).to.be.a('string').and.not.empty;",
+                  "    pm.expect(json.message).to.have.property('prompt_tokens');",
+                  "    pm.expect(json.message).to.have.property('completion_tokens');",
+                  "});",
+                  "",
+                  "pm.test('Sources is an array', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.sources).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('Usage contains token counts', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.usage).to.have.property('model');",
+                  "    pm.expect(json.usage).to.have.property('prompt_tokens');",
+                  "    pm.expect(json.usage).to.have.property('completion_tokens');",
+                  "    pm.expect(json.usage).to.have.property('total_tokens');",
+                  "});",
+                  "",
+                  "var json = pm.response.json();",
+                  "pm.collectionVariables.set('chat_id', json.chat_id);",
+                  "console.log('Saved chat_id: ' + json.chat_id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Continue Conversation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bot_profile_id\": \"{{profile_id}}\",\n  \"message\": \"How does the multi-tenancy isolation work?\",\n  \"chat_id\": \"{{chat_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/chat",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "chat"]
+            },
+            "description": "Send a follow-up message to an existing conversation. The LLM receives the full conversation history for context continuity."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Uses the same chat_id', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.chat_id).to.eql(pm.collectionVariables.get('chat_id'));",
+                  "});",
+                  "",
+                  "pm.test('Assistant replied', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.message.role).to.eql('assistant');",
+                  "    pm.expect(json.message.content).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Get Chat Metadata",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/chat/{{chat_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "chat", "{{chat_id}}"]
+            },
+            "description": "Get chat session metadata including message count and total token usage."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Chat metadata has expected fields', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.id).to.eql(pm.collectionVariables.get('chat_id'));",
+                  "    pm.expect(json).to.have.property('message_count');",
+                  "    pm.expect(json).to.have.property('total_prompt_tokens');",
+                  "    pm.expect(json).to.have.property('total_completion_tokens');",
+                  "    pm.expect(json).to.have.property('title');",
+                  "    pm.expect(json.message_count).to.be.at.least(2);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Get Chat Messages (History)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/chat/{{chat_id}}/messages",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "chat", "{{chat_id}}", "messages"]
+            },
+            "description": "Get all messages in a chat session, ordered chronologically."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Returns array of messages', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json).to.be.an('array');",
+                  "    pm.expect(json.length).to.be.at.least(2);",
+                  "});",
+                  "",
+                  "pm.test('Messages alternate user/assistant', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json[0].role).to.eql('user');",
+                  "    pm.expect(json[1].role).to.eql('assistant');",
+                  "});",
+                  "",
+                  "pm.test('Each message has required fields', function () {",
+                  "    var json = pm.response.json();",
+                  "    json.forEach(function(msg) {",
+                  "        pm.expect(msg).to.have.property('id');",
+                  "        pm.expect(msg).to.have.property('chat_id');",
+                  "        pm.expect(msg).to.have.property('role');",
+                  "        pm.expect(msg).to.have.property('content');",
+                  "        pm.expect(msg).to.have.property('created_at');",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Chat — Invalid Bot Profile (404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bot_profile_id\": \"00000000-0000-0000-0000-000000000000\",\n  \"message\": \"Hello\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/chat",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "chat"]
+            },
+            "description": "Chatting with a nonexistent bot_profile_id should return 404."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "",
+                  "pm.test('Error detail mentions bot profile', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.detail.toLowerCase()).to.include('bot profile');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Chat — Invalid Chat ID (404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bot_profile_id\": \"{{profile_id}}\",\n  \"message\": \"Hello\",\n  \"chat_id\": \"00000000-0000-0000-0000-000000000000\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/chat",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "chat"]
+            },
+            "description": "Continuing a nonexistent chat session should return 404."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "",
+                  "pm.test('Error detail mentions chat', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.detail.toLowerCase()).to.include('chat');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ],
+      "description": "Chat (RAG) endpoint: new conversation, follow-up, history retrieval, and error cases.\n\n**Prerequisites:** A bot profile with an ingested source, and a configured LLM provider (or the worker mocked)."
+    },
+    {
+      "name": "6 — Cleanup",
+      "item": [
+        {
+          "name": "Delete Source (Soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/sources/{{source_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "sources", "{{source_id}}"]
+            },
+            "description": "Soft-delete a source (sets is_active=False)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 204', function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Delete Bot Profile (Soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/bot-profiles/{{profile_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "bot-profiles", "{{profile_id}}"]
+            },
+            "description": "Soft-delete a bot profile (sets is_active=False)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 204', function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ],
+      "description": "Cleanup: soft-delete resources created during the test run."
+    }
+  ]
+}

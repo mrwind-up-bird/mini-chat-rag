@@ -178,6 +178,61 @@ curl -X POST http://localhost:8000/v1/chat \
 - Cross-tenant FK references validated before creation
 - No secrets in code or logs; everything via `.env`
 
+## Testing with Postman
+
+A complete Postman collection is included at `postman/MiniRAG.postman_collection.json` with 28 requests across 7 folders, each with automated test scripts.
+
+### Import & Run
+
+1. **Import**: Open Postman, click Import, and select `postman/MiniRAG.postman_collection.json`
+2. **Run in order**: Execute the numbered folders sequentially (0-6) — test scripts auto-save IDs and tokens to collection variables
+
+### Collection Structure
+
+| Folder | Requests | What it tests |
+|---|---|---|
+| 0 — Health | 1 | Smoke test (no auth) |
+| 1 — Tenant Bootstrap | 4 | Create tenant, duplicate slug 409, get tenant, unauthenticated 401 |
+| 2 — API Tokens | 3 | Create, list, revoke |
+| 3 — Bot Profiles | 6 | Create, create with credentials, list, get, update, 404 |
+| 4 — Sources | 8 | Create, list, filter, get, update, ingest trigger, status poll, cross-tenant 422 |
+| 5 — Chat (RAG) | 6 | New conversation, continue, get metadata, get history, invalid bot 404, invalid chat 404 |
+| 6 — Cleanup | 2 | Soft-delete source and bot profile |
+
+### Auto-Managed Variables
+
+The collection uses these variables (auto-populated by test scripts):
+
+| Variable | Set by | Used by |
+|---|---|---|
+| `base_url` | Pre-configured (`http://localhost:8000`) | All requests |
+| `api_token` | Bootstrap Tenant | All authenticated requests (collection-level Bearer auth) |
+| `tenant_id` | Bootstrap Tenant | Tenant assertions |
+| `profile_id` | Create Bot Profile | Sources, Chat, Cleanup |
+| `source_id` | Create Source | Ingest, Get/Update/Delete Source |
+| `chat_id` | Start New Conversation | Continue, Get metadata/messages |
+| `token_id` | Create API Token | Revoke API Token |
+
+### Running with Newman (CLI)
+
+```bash
+# Install Newman
+npm install -g newman
+
+# Run the full collection
+newman run postman/MiniRAG.postman_collection.json
+
+# Run with a custom base URL
+newman run postman/MiniRAG.postman_collection.json --env-var "base_url=http://localhost:9000"
+```
+
+### Prerequisites for Full Run
+
+- API running (`uvicorn app.main:app --reload`)
+- For folders 0-4: only needs Postgres (infrastructure services)
+- For folder 5 (Chat): also needs Redis + worker + Qdrant + a configured LLM provider
+- Run folder 4's "Trigger Ingestion" and wait for source status to become `ready` before running folder 5
+
 ## Project Structure
 
 ```
@@ -200,6 +255,7 @@ app/
     main.py                # ARQ worker config
     ingest.py              # Ingestion task
 tests/                     # 31 async integration tests
+postman/                   # Postman collection (28 requests, auto-tests)
 docker-compose.yml         # Postgres, Qdrant, Redis, web, worker
 Dockerfile                 # Multi-stage (web + worker targets)
 ```
