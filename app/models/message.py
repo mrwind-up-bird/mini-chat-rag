@@ -33,6 +33,9 @@ class Message(TimestampMixin, SQLModel, table=True):
     # Retrieved context chunk IDs used for this response (JSON array of UUIDs)
     context_chunks: str = Field(default="[]", sa_column=Column(Text, nullable=False, server_default="[]"))
 
+    # User feedback on assistant messages: "positive", "negative", or None
+    feedback: str | None = Field(default=None, max_length=20)
+
 
 # ── Pydantic schemas ─────────────────────────────────────────
 
@@ -43,4 +46,5 @@ class MessageRead(SQLModel):
     content: str
     prompt_tokens: int
     completion_tokens: int
+    feedback: str | None = None
     created_at: datetime

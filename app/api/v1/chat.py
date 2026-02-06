@@ -2,6 +2,7 @@
 
 import json
 import uuid
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
@@ -179,6 +180,7 @@ async def chat(
             content=assistant_msg.content,
             prompt_tokens=assistant_msg.prompt_tokens,
             completion_tokens=assistant_msg.completion_tokens,
+            feedback=assistant_msg.feedback,
             created_at=assistant_msg.created_at,
         ),
         sources=sources,
@@ -218,6 +220,51 @@ async def get_chat_messages(
     )
     result = await session.execute(stmt)
     return [MessageRead.model_validate(m) for m in result.scalars().all()]
+
+
+# ── Message feedback ──────────────────────────────────────
+
+class FeedbackRequest(BaseModel):
+    feedback: Literal["positive", "negative"] | None
+
+
+@router.patch(
+    "/{chat_id}/messages/{message_id}/feedback",
+    response_model=MessageRead,
+)
+async def submit_feedback(
+    chat_id: uuid.UUID,
+    message_id: uuid.UUID,
+    body: FeedbackRequest,
+    auth: Auth,
+    session: Session,
+) -> MessageRead:
+    """Set or clear feedback on an assistant message."""
+    await _get_chat(chat_id, auth.tenant_id, session)
+
+    stmt = select(Message).where(
+        Message.id == message_id,
+        Message.chat_id == chat_id,
+        Message.tenant_id == auth.tenant_id,
+    )
+    result = await session.execute(stmt)
+    msg = result.scalar_one_or_none()
+    if msg is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Message not found",
+        )
+    if msg.role != MessageRole.ASSISTANT:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Feedback can only be set on assistant messages",
+        )
+
+    msg.feedback = body.feedback
+    session.add(msg)
+    await session.commit()
+    await session.refresh(msg)
+    return MessageRead.model_validate(msg)
 
 
 # ── Internal helpers ──────────────────────────────────────────

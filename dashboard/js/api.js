@@ -135,6 +135,9 @@ const API = {
     if (chatId) body.chat_id = chatId;
     return this.post('/v1/chat', body);
   },
+  submitFeedback(chatId, messageId, feedback) {
+    return this.patch(`/v1/chat/${chatId}/messages/${messageId}/feedback`, { feedback });
+  },
 
   // ── API Tokens ────────────────────────────────────────
   listApiTokens() {
