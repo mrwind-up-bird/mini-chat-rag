@@ -39,7 +39,8 @@
     { "key": "profile_id",   "value": "", "type": "string" },
     { "key": "source_id",    "value": "", "type": "string" },
     { "key": "chat_id",      "value": "", "type": "string" },
-    { "key": "token_id",     "value": "", "type": "string" }
+    { "key": "token_id",     "value": "", "type": "string" },
+    { "key": "uploaded_source_id", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -701,6 +702,113 @@
           }
         },
         {
+          "name": "Upload Source (file)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Source type is upload', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.source_type).to.eql('upload');",
+                  "    pm.expect(json.status).to.eql('pending');",
+                  "    pm.expect(json.is_active).to.be.true;",
+                  "});",
+                  "pm.test('Config contains original filename and file size', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.config).to.have.property('original_filename');",
+                  "    pm.expect(json.config).to.have.property('file_size');",
+                  "    pm.expect(json.config.file_size).to.be.above(0);",
+                  "});",
+                  "pm.test('Name defaults to filename', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.name).to.eql('test_upload.txt');",
+                  "});",
+                  "pm.collectionVariables.set('uploaded_source_id', pm.response.json().id);",
+                  "console.log('Saved uploaded_source_id: ' + pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "fixtures/test_upload.txt" },
+                { "key": "bot_profile_id", "value": "{{profile_id}}", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{base_url}}/v1/sources/upload", "host": ["{{base_url}}"], "path": ["v1", "sources", "upload"] },
+            "description": "Upload a text file. The API extracts text, creates a Source (type=upload), and auto-triggers ingestion.\n\nSupported types: PDF, DOCX, TXT, MD, CSV (max 10 MB).\n\nRun Newman with `--working-dir postman/` so the fixture file is found."
+          }
+        },
+        {
+          "name": "Upload Source — Unsupported Type (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 422', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "pm.test('Error mentions unsupported file type', function () {",
+                  "    pm.expect(pm.response.json().detail).to.include('Unsupported file type');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "fixtures/test_bad.exe" },
+                { "key": "bot_profile_id", "value": "{{profile_id}}", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{base_url}}/v1/sources/upload", "host": ["{{base_url}}"], "path": ["v1", "sources", "upload"] },
+            "description": "Uploading an unsupported file type (.exe) should return 422."
+          }
+        },
+        {
+          "name": "Get Uploaded Source",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Uploaded source exists and is upload type', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.id).to.eql(pm.collectionVariables.get('uploaded_source_id'));",
+                  "    pm.expect(json.source_type).to.eql('upload');",
+                  "});",
+                  "console.log('Uploaded source status: ' + pm.response.json().status + ', chunks: ' + pm.response.json().chunk_count);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/v1/sources/{{uploaded_source_id}}", "host": ["{{base_url}}"], "path": ["v1", "sources", "{{uploaded_source_id}}"] },
+            "description": "Verify the uploaded source was created and can be retrieved."
+          }
+        },
+        {
           "name": "Create Source — Cross-Tenant Bot Profile (422)",
           "event": [
             {
@@ -913,6 +1021,28 @@
       "name": "6 — Cleanup",
       "description": "Cleanup: soft-delete resources created during the test run.",
       "item": [
+        {
+          "name": "Delete Uploaded Source (Soft)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 204', function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{base_url}}/v1/sources/{{uploaded_source_id}}", "host": ["{{base_url}}"], "path": ["v1", "sources", "{{uploaded_source_id}}"] },
+            "description": "Soft-delete the uploaded source."
+          }
+        },
         {
           "name": "Delete Source (Soft)",
           "event": [

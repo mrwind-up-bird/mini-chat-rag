@@ -1,0 +1,10 @@
+MiniRAG File Upload Test
+========================
+
+This is a test document for the file upload endpoint.
+
+Q: What file types does MiniRAG support?
+A: PDF, DOCX, TXT, MD, and CSV files up to 10 MB.
+
+Q: How does file upload work?
+A: Files are uploaded via multipart POST, text is extracted, and ingestion is auto-triggered.
