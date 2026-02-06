@@ -39,6 +39,36 @@ A modular, provider-agnostic Retrieval-Augmented Generation (RAG) platform with 
 | Task queue | Redis + ARQ |
 | Auth | Argon2 passwords, SHA-256 API tokens, Fernet field encryption, JWT |
 | Containerization | Docker & Docker Compose |
+| Dashboard | HTML + Tailwind CSS (CDN) + Alpine.js + Chart.js — no build step |
+
+## Dashboard
+
+MiniRAG includes a built-in admin dashboard served directly by FastAPI at `/dashboard`. No build step required.
+
+- **Overview** — Service health, summary stats, quick actions
+- **Bot Profiles** — CRUD with inline "Try It" chat
+- **Sources** — Manage knowledge sources, trigger ingestion
+- **Chat History** — Browse and view conversations
+- **API Tokens** — Create/revoke tokens
+- **Users** — Team management (owner/admin only)
+- **Usage Analytics** — Token consumption charts by day and model
+- **Settings** — Tenant info, system health
+
+See [docs/admin-guide.md](docs/admin-guide.md) for a full walkthrough.
+
+## Embeddable Chat Widget
+
+Add a chat widget to any website with a single script tag:
+
+```html
+<script src="https://your-host/dashboard/widget/minirag-widget.js"
+        data-bot-id="YOUR_BOT_PROFILE_ID"
+        data-api-url="https://your-host"
+        data-api-token="YOUR_API_TOKEN">
+</script>
+```
+
+See [docs/widget-integration.md](docs/widget-integration.md) for configuration options and styling.
 
 ## Quick Start
 
@@ -136,6 +166,8 @@ curl -X POST http://localhost:8000/v1/chat \
 |---|---|---|---|
 | `POST` | `/v1/tenants` | No | Bootstrap tenant + owner + API token |
 | `GET` | `/v1/tenants/me` | Yes | Get current tenant info |
+| `POST` | `/v1/auth/login` | No | Login with email + password, get JWT |
+| `GET` | `/v1/auth/me` | Yes | Get current user + tenant |
 | `POST` | `/v1/api-tokens` | Yes | Create new API token |
 | `GET` | `/v1/api-tokens` | Yes | List API tokens |
 | `DELETE` | `/v1/api-tokens/{id}` | Yes | Revoke token |
@@ -150,9 +182,17 @@ curl -X POST http://localhost:8000/v1/chat \
 | `PATCH` | `/v1/sources/{id}` | Yes | Update source |
 | `DELETE` | `/v1/sources/{id}` | Yes | Deactivate source |
 | `POST` | `/v1/sources/{id}/ingest` | Yes | Trigger ingestion |
+| `GET` | `/v1/chat` | Yes | List chat sessions |
 | `POST` | `/v1/chat` | Yes | Send message (RAG) |
 | `GET` | `/v1/chat/{id}` | Yes | Get chat metadata |
 | `GET` | `/v1/chat/{id}/messages` | Yes | Get chat history |
+| `POST` | `/v1/users` | Yes | Create user (admin+) |
+| `GET` | `/v1/users` | Yes | List users |
+| `PATCH` | `/v1/users/{id}` | Yes | Update user (admin+) |
+| `DELETE` | `/v1/users/{id}` | Yes | Deactivate user (admin+) |
+| `GET` | `/v1/stats/overview` | Yes | Summary counts |
+| `GET` | `/v1/stats/usage` | Yes | Token usage by day/model |
+| `GET` | `/v1/system/health` | Yes | Service connectivity check |
 
 ## Data Model
 
@@ -237,7 +277,7 @@ newman run postman/MiniRAG.postman_collection.json --env-var "base_url=http://lo
 
 ```
 app/
-  main.py                  # FastAPI entrypoint
+  main.py                  # FastAPI entrypoint + CORS + static serving
   core/
     config.py              # Settings from .env
     database.py            # Async engine + session factory
@@ -245,7 +285,16 @@ app/
   models/                  # SQLModel tables + Pydantic schemas
   api/
     deps.py                # Auth dependencies
-    v1/                    # Versioned route modules
+    v1/
+      auth.py              # Login + /me endpoints
+      tenants.py           # Tenant bootstrap
+      api_tokens.py        # Token CRUD
+      bot_profiles.py      # Bot profile CRUD
+      sources.py           # Source CRUD + ingest trigger
+      chat.py              # Chat API + list chats
+      users.py             # Users CRUD
+      stats.py             # Usage statistics
+      system.py            # System health
   services/
     chunking.py            # Text normalization + splitting
     embedding.py           # LiteLLM embedding wrapper
@@ -254,11 +303,27 @@ app/
   workers/
     main.py                # ARQ worker config
     ingest.py              # Ingestion task
-tests/                     # 31 async integration tests
+dashboard/
+  index.html               # SPA dashboard (Alpine.js + Tailwind)
+  css/app.css              # Custom styles
+  js/api.js                # API client with auth
+  js/app.js                # Alpine.js stores + helpers
+  widget/
+    minirag-widget.js      # Embeddable chat widget (Shadow DOM)
+    minirag-widget.css     # Widget styles
+docs/
+  installation.md          # Setup & maintenance guide
+  admin-guide.md           # Dashboard usage guide
+  widget-integration.md    # Widget embedding guide
+tests/                     # 31+ async integration tests
 postman/                   # Postman collection (28 requests, auto-tests)
 docker-compose.yml         # Postgres, Qdrant, Redis, web, worker
 Dockerfile                 # Multi-stage (web + worker targets)
 ```
+
+## Blog Drafts
+
+Build notes and development logs are in the [`drafts/`](drafts/) directory.
 
 ## License
 

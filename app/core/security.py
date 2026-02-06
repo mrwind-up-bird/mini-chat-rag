@@ -62,13 +62,16 @@ def decrypt_value(ciphertext: str) -> str:
 
 # ── JWT ───────────────────────────────────────────────────────
 
-def create_jwt(subject: str, tenant_id: str, expires_delta: timedelta | None = None) -> str:
+def create_jwt(
+    subject: str, tenant_id: str, role: str = "member", expires_delta: timedelta | None = None
+) -> str:
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=settings.jwt_expire_minutes)
     )
     payload = {
         "sub": subject,
         "tid": tenant_id,
+        "role": role,
         "exp": expire,
     }
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)

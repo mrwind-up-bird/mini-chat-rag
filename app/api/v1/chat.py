@@ -18,6 +18,30 @@ from app.services.orchestrator import run_chat_turn
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
+# ── List chats ────────────────────────────────────────────────
+
+@router.get("", response_model=list[ChatRead])
+async def list_chats(
+    auth: Auth,
+    session: Session,
+    bot_profile_id: uuid.UUID | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[ChatRead]:
+    """List chat sessions for the current tenant."""
+    stmt = select(Chat).where(Chat.tenant_id == auth.tenant_id)
+    if bot_profile_id:
+        stmt = stmt.where(Chat.bot_profile_id == bot_profile_id)
+    stmt = (
+        stmt
+        .order_by(Chat.created_at.desc())  # type: ignore[union-attr]
+        .limit(min(limit, 100))
+        .offset(offset)
+    )
+    result = await session.execute(stmt)
+    return [ChatRead.model_validate(c) for c in result.scalars().all()]
+
+
 # ── Request / Response schemas ────────────────────────────────
 
 class ChatRequest(BaseModel):

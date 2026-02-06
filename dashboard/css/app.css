@@ -1,0 +1,138 @@
+/* MiniRAG Dashboard — Custom styles */
+
+/* ── Layout ──────────────────────────────────────────────── */
+.sidebar {
+  width: 260px;
+  min-height: 100vh;
+  transition: transform 0.2s;
+}
+
+.main-content {
+  margin-left: 260px;
+  min-height: 100vh;
+}
+
+@media (max-width: 1024px) {
+  .sidebar { transform: translateX(-100%); position: fixed; z-index: 40; }
+  .sidebar.open { transform: translateX(0); }
+  .main-content { margin-left: 0; }
+}
+
+/* ── Cards ───────────────────────────────────────────────── */
+.stat-card {
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px -5px rgb(0 0 0 / 0.1);
+}
+
+/* ── Status badges ───────────────────────────────────────── */
+.badge { @apply px-2 py-0.5 rounded-full text-xs font-medium; }
+.badge-pending { @apply bg-yellow-100 text-yellow-800; }
+.badge-processing { @apply bg-blue-100 text-blue-800; }
+.badge-ready { @apply bg-green-100 text-green-800; }
+.badge-error { @apply bg-red-100 text-red-800; }
+.badge-owner { @apply bg-purple-100 text-purple-800; }
+.badge-admin { @apply bg-indigo-100 text-indigo-800; }
+.badge-member { @apply bg-gray-100 text-gray-800; }
+
+/* ── Form elements ───────────────────────────────────────── */
+.form-input {
+  @apply w-full px-3 py-2 border border-gray-300 rounded-lg text-sm
+         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+         bg-white;
+}
+
+.form-label {
+  @apply block text-sm font-medium text-gray-700 mb-1;
+}
+
+.btn {
+  @apply px-4 py-2 rounded-lg text-sm font-medium transition-colors
+         focus:outline-none focus:ring-2 focus:ring-offset-2 cursor-pointer
+         disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-primary {
+  @apply btn bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500;
+}
+
+.btn-secondary {
+  @apply btn bg-white text-gray-700 border border-gray-300
+         hover:bg-gray-50 focus:ring-indigo-500;
+}
+
+.btn-danger {
+  @apply btn bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
+}
+
+.btn-success {
+  @apply btn bg-green-600 text-white hover:bg-green-700 focus:ring-green-500;
+}
+
+.btn-sm {
+  @apply px-3 py-1.5 text-xs;
+}
+
+/* ── Table ───────────────────────────────────────────────── */
+.data-table {
+  @apply w-full text-sm text-left;
+}
+.data-table thead {
+  @apply bg-gray-50 text-gray-600 uppercase text-xs;
+}
+.data-table th {
+  @apply px-4 py-3 font-medium;
+}
+.data-table td {
+  @apply px-4 py-3 border-t border-gray-100;
+}
+.data-table tbody tr:hover {
+  @apply bg-gray-50;
+}
+
+/* ── Modal ───────────────────────────────────────────────── */
+.modal-backdrop {
+  @apply fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4;
+}
+.modal-content {
+  @apply bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto;
+}
+
+/* ── Toast ───────────────────────────────────────────────── */
+.toast {
+  @apply fixed bottom-6 right-6 z-[100] px-5 py-3 rounded-lg shadow-lg text-sm font-medium
+         transition-all duration-300;
+}
+.toast-success { @apply bg-green-600 text-white; }
+.toast-error { @apply bg-red-600 text-white; }
+.toast-info { @apply bg-indigo-600 text-white; }
+
+/* ── Chat widget inline ──────────────────────────────────── */
+.chat-inline {
+  @apply border rounded-xl overflow-hidden;
+  height: 500px;
+  display: flex;
+  flex-direction: column;
+}
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  @apply p-4 space-y-3;
+}
+.chat-input-bar {
+  @apply p-3 border-t bg-gray-50 flex gap-2;
+}
+
+/* ── Spinner ─────────────────────────────────────────────── */
+.spinner {
+  @apply inline-block w-5 h-5 border-2 border-gray-300 border-t-indigo-600 rounded-full;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Empty state ─────────────────────────────────────────── */
+.empty-state {
+  @apply text-center py-12 text-gray-400;
+}

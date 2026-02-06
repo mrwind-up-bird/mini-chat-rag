@@ -64,6 +64,7 @@ services:
         condition: service_healthy
     volumes:
       - ./app:/app/app  # hot-reload in dev
+      - ./dashboard:/app/dashboard  # dashboard hot-reload
 
   # ── ARQ worker service ────────────────────────────────────
   worker:
