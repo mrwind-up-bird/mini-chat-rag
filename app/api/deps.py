@@ -1,7 +1,7 @@
 """FastAPI dependencies for authentication and tenant resolution."""
 
 import uuid
-from datetime import datetime, timezone
+from app.models.base import utcnow
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -55,7 +55,7 @@ async def _resolve_api_token(
         )
 
     # Check expiry
-    if api_token.expires_at and api_token.expires_at < datetime.now(timezone.utc):
+    if api_token.expires_at and api_token.expires_at < utcnow():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="API token has expired",
@@ -70,7 +70,7 @@ async def _resolve_api_token(
         )
 
     # Update last_used_at (fire-and-forget, non-blocking)
-    api_token.last_used_at = datetime.now(timezone.utc)
+    api_token.last_used_at = utcnow()
     session.add(api_token)
     await session.commit()
 
