@@ -35,5 +35,5 @@ Thumbs.db
 # ── Docker volumes (local data) ──────────────────────────
 .data/
 
-# ── Memory init marker ───────────────────────────────────
-.memory/.initialized
+# ── Claude Code local settings ────────────────────────────
+.claude/
