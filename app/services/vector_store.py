@@ -28,7 +28,7 @@ async def get_qdrant_client() -> AsyncQdrantClient:
     global _client
     if _client is None:
         settings = get_settings()
-        _client = AsyncQdrantClient(url=settings.qdrant_url)
+        _client = AsyncQdrantClient(url=settings.qdrant_url, check_compatibility=False)
     return _client
 
 
@@ -90,9 +90,9 @@ async def search_chunks(
             FieldCondition(key="bot_profile_id", match=MatchValue(value=bot_profile_id)),
         ]
     )
-    results = await client.search(
+    response = await client.query_points(
         collection_name=COLLECTION_NAME,
-        query_vector=query_vector,
+        query=query_vector,
         query_filter=query_filter,
         limit=limit,
         score_threshold=score_threshold,
@@ -103,7 +103,7 @@ async def search_chunks(
             "score": hit.score,
             "payload": hit.payload,
         }
-        for hit in results
+        for hit in response.points
     ]
 
 
