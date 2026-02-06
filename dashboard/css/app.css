@@ -746,11 +746,20 @@ input[type="range"]::-webkit-slider-thumb {
   font-weight: 500;
 }
 
+.file-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
 .file-preview {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
-  padding: 12px 14px;
+  padding: 10px 14px;
 }
 
 .upload-progress {
@@ -762,15 +771,9 @@ input[type="range"]::-webkit-slider-thumb {
 
 .upload-progress-bar {
   height: 100%;
-  width: 40%;
   background: linear-gradient(90deg, var(--violet), var(--cyan));
   border-radius: 2px;
-  animation: progress-indeterminate 1.5s ease-in-out infinite;
-}
-
-@keyframes progress-indeterminate {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(350%); }
+  transition: width 0.3s ease;
 }
 
 /* ── Modal close button ────────────────────────────────────── */

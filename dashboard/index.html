@@ -361,56 +361,68 @@
                   <input x-model="form.config.url" class="form-input" placeholder="https://...">
                 </div>
                 <div x-show="form.source_type === 'upload'">
-                  <label class="form-label">File</label>
+                  <label class="form-label">Files</label>
                   <div class="drop-zone"
                        :class="{ 'dragover': dragover }"
                        @click="$refs.fileInput.click()"
                        @dragover.prevent="dragover = true"
                        @dragleave.prevent="dragover = false"
                        @drop.prevent="dragover = false; handleFileDrop($event)">
-                    <template x-if="!uploadFile">
-                      <div class="text-center">
-                        <div class="drop-zone-icon">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none"
-                               stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="17 8 12 3 7 8"/>
-                            <line x1="12" y1="3" x2="12" y2="15"/>
-                          </svg>
-                        </div>
-                        <p class="drop-zone-text">Drop file here or click to browse</p>
-                        <p class="text-xs mt-1" style="color: rgba(255,255,255,0.3);">PDF, DOCX, TXT, MD, CSV (max 10 MB)</p>
+                    <div class="text-center">
+                      <div class="drop-zone-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                          <polyline points="17 8 12 3 7 8"/>
+                          <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
                       </div>
-                    </template>
-                    <template x-if="uploadFile">
-                      <div class="file-preview">
-                        <div class="flex items-center gap-3">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                               style="color: #a78bfa; flex-shrink: 0;">
-                            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
-                            <polyline points="14 2 14 8 20 8"/>
-                          </svg>
-                          <div class="flex-1 min-w-0">
-                            <p class="text-sm font-medium text-white truncate" x-text="uploadFile.name"></p>
-                            <p class="text-xs" style="color: rgba(255,255,255,0.4);" x-text="formatFileSize(uploadFile.size)"></p>
-                          </div>
-                          <button type="button" @click.stop="uploadFile = null" class="modal-close text-sm">&times;</button>
-                        </div>
-                      </div>
-                    </template>
-                    <input type="file" x-ref="fileInput" class="hidden"
+                      <p class="drop-zone-text">Drop files here or click to browse</p>
+                      <p class="text-xs mt-1" style="color: rgba(255,255,255,0.3);">PDF, DOCX, TXT, MD, CSV (max 10 MB each)</p>
+                    </div>
+                    <input type="file" x-ref="fileInput" class="hidden" multiple
                            accept=".pdf,.docx,.txt,.md,.csv"
                            @change="handleFileSelect($event)">
                   </div>
+                  <template x-if="uploadFiles.length > 0">
+                    <div class="file-list">
+                      <template x-for="(f, idx) in uploadFiles" :key="f.name + f.size">
+                        <div class="file-preview">
+                          <div class="flex items-center gap-3">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                 style="color: #a78bfa; flex-shrink: 0;">
+                              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                              <polyline points="14 2 14 8 20 8"/>
+                            </svg>
+                            <div class="flex-1 min-w-0">
+                              <p class="text-sm font-medium text-white truncate" x-text="f.name"></p>
+                              <p class="text-xs" style="color: rgba(255,255,255,0.4);" x-text="formatFileSize(f.size)"></p>
+                            </div>
+                            <button type="button" @click="removeFile(idx)" class="modal-close text-sm">&times;</button>
+                          </div>
+                        </div>
+                      </template>
+                      <button type="button" @click="uploadFiles = []"
+                              class="text-xs mt-1" style="color: rgba(255,255,255,0.35); background: none; border: none; cursor: pointer; padding: 0;">
+                        Clear all
+                      </button>
+                    </div>
+                  </template>
                 </div>
                 <template x-if="uploading">
-                  <div class="upload-progress"><div class="upload-progress-bar"></div></div>
+                  <div>
+                    <div class="flex items-center justify-between mb-1">
+                      <span class="text-xs" style="color: rgba(255,255,255,0.5);" x-text="uploadStatus"></span>
+                      <span class="text-xs font-medium" style="color: #a78bfa;" x-text="uploadProgress + '/' + uploadFiles.length"></span>
+                    </div>
+                    <div class="upload-progress"><div class="upload-progress-bar" :style="'width:' + Math.round((uploadProgress / uploadFiles.length) * 100) + '%'"></div></div>
+                  </div>
                 </template>
                 <div class="flex justify-end gap-2">
                   <button type="button" @click="showCreate = false" class="btn-secondary">Cancel</button>
                   <button type="submit" class="btn-primary" :disabled="saving || uploading">
-                    <span x-show="!uploading" x-text="form.source_type === 'upload' ? 'Upload' : 'Create'"></span>
+                    <span x-show="!uploading" x-text="form.source_type === 'upload' ? (uploadFiles.length > 1 ? 'Upload ' + uploadFiles.length + ' Files' : 'Upload') : 'Create'"></span>
                     <span x-show="uploading" class="flex items-center gap-2"><span class="spinner"></span> Uploading...</span>
                   </button>
                 </div>
@@ -829,8 +841,10 @@
         showCreate: false,
         saving: false,
         form: { bot_profile_id: '', name: '', source_type: 'text', content: '', config: {} },
-        uploadFile: null,
+        uploadFiles: [],
         uploading: false,
+        uploadProgress: 0,
+        uploadStatus: '',
         dragover: false,
 
         async load() {
@@ -845,16 +859,19 @@
         },
 
         handleFileSelect(event) {
-          const file = event.target.files[0];
-          if (file) this.validateAndSetFile(file);
+          for (const file of event.target.files) {
+            this.validateAndAddFile(file);
+          }
+          event.target.value = '';
         },
 
         handleFileDrop(event) {
-          const file = event.dataTransfer.files[0];
-          if (file) this.validateAndSetFile(file);
+          for (const file of event.dataTransfer.files) {
+            this.validateAndAddFile(file);
+          }
         },
 
-        validateAndSetFile(file) {
+        validateAndAddFile(file) {
           const allowed = ['.pdf', '.docx', '.txt', '.md', '.csv'];
           const ext = '.' + file.name.split('.').pop().toLowerCase();
           if (!allowed.includes(ext)) {
@@ -862,10 +879,15 @@
             return;
           }
           if (file.size > 10 * 1024 * 1024) {
-            Alpine.store('toast').error('File too large. Maximum 10 MB.');
+            Alpine.store('toast').error(`${file.name} is too large. Maximum 10 MB.`);
             return;
           }
-          this.uploadFile = file;
+          if (this.uploadFiles.some(f => f.name === file.name && f.size === file.size)) return;
+          this.uploadFiles.push(file);
+        },
+
+        removeFile(idx) {
+          this.uploadFiles.splice(idx, 1);
         },
 
         formatFileSize(bytes) {
@@ -901,8 +923,8 @@
         },
 
         async uploadSource() {
-          if (!this.uploadFile) {
-            Alpine.store('toast').error('Please select a file.');
+          if (this.uploadFiles.length === 0) {
+            Alpine.store('toast').error('Please select at least one file.');
             return;
           }
           if (!this.form.bot_profile_id) {
@@ -910,20 +932,33 @@
             return;
           }
           this.uploading = true;
-          try {
-            const fd = new FormData();
-            fd.append('file', this.uploadFile);
-            fd.append('bot_profile_id', this.form.bot_profile_id);
-            if (this.form.name) fd.append('name', this.form.name);
-            if (this.form.description) fd.append('description', this.form.description);
-            await API.uploadSource(fd);
-            Alpine.store('toast').success('File uploaded & ingestion started');
+          this.uploadProgress = 0;
+          let succeeded = 0;
+          let failed = 0;
+          for (const file of this.uploadFiles) {
+            this.uploadStatus = `Uploading ${file.name}...`;
+            try {
+              const fd = new FormData();
+              fd.append('file', file);
+              fd.append('bot_profile_id', this.form.bot_profile_id);
+              await API.uploadSource(fd);
+              succeeded++;
+            } catch (e) {
+              failed++;
+              Alpine.store('toast').error(`${file.name}: ${e.message}`);
+            }
+            this.uploadProgress++;
+          }
+          this.uploading = false;
+          this.uploadStatus = '';
+          if (succeeded > 0) {
+            const msg = succeeded === 1 ? 'File uploaded & ingestion started' : `${succeeded} files uploaded & ingestion started`;
+            Alpine.store('toast').success(failed > 0 ? `${msg} (${failed} failed)` : msg);
             this.showCreate = false;
-            this.uploadFile = null;
+            this.uploadFiles = [];
             this.form = { bot_profile_id: '', name: '', source_type: 'text', content: '', config: {} };
             await this.load();
-          } catch (e) { Alpine.store('toast').error(e.message); }
-          this.uploading = false;
+          }
         },
 
         async ingest(src) {
