@@ -40,7 +40,9 @@
     { "key": "source_id",    "value": "", "type": "string" },
     { "key": "chat_id",      "value": "", "type": "string" },
     { "key": "token_id",     "value": "", "type": "string" },
-    { "key": "uploaded_source_id", "value": "", "type": "string" }
+    { "key": "uploaded_source_id", "value": "", "type": "string" },
+    { "key": "message_id", "value": "", "type": "string" },
+    { "key": "user_message_id", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -866,7 +868,8 @@
                   "    pm.expect(json.usage).to.have.property('total_tokens');",
                   "});",
                   "pm.collectionVariables.set('chat_id', pm.response.json().chat_id);",
-                  "console.log('Saved chat_id: ' + pm.response.json().chat_id);"
+                  "pm.collectionVariables.set('message_id', pm.response.json().message.id);",
+                  "console.log('Saved chat_id: ' + pm.response.json().chat_id + ', message_id: ' + pm.response.json().message.id);"
                 ]
               }
             }
@@ -957,7 +960,9 @@
                   "    var json = pm.response.json();",
                   "    pm.expect(json[0].role).to.eql('user');",
                   "    pm.expect(json[1].role).to.eql('assistant');",
-                  "});"
+                  "});",
+                  "pm.collectionVariables.set('user_message_id', pm.response.json()[0].id);",
+                  "console.log('Saved user_message_id: ' + pm.response.json()[0].id);"
                 ]
               }
             }
@@ -1013,6 +1018,112 @@
             "body": { "mode": "raw", "raw": "{\n  \"bot_profile_id\": \"{{profile_id}}\",\n  \"message\": \"Hello\",\n  \"chat_id\": \"00000000-0000-0000-0000-000000000000\"\n}" },
             "url": { "raw": "{{base_url}}/v1/chat", "host": ["{{base_url}}"], "path": ["v1", "chat"] },
             "description": "Continuing a nonexistent chat session should return 404."
+          }
+        },
+        {
+          "name": "Submit Positive Feedback",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Feedback is positive', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.feedback).to.eql('positive');",
+                  "    pm.expect(json.role).to.eql('assistant');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\n  \"feedback\": \"positive\"\n}" },
+            "url": { "raw": "{{base_url}}/v1/chat/{{chat_id}}/messages/{{message_id}}/feedback", "host": ["{{base_url}}"], "path": ["v1", "chat", "{{chat_id}}", "messages", "{{message_id}}", "feedback"] },
+            "description": "Set positive feedback on an assistant message."
+          }
+        },
+        {
+          "name": "Toggle Feedback to Negative",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Feedback toggled to negative', function () {",
+                  "    pm.expect(pm.response.json().feedback).to.eql('negative');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\n  \"feedback\": \"negative\"\n}" },
+            "url": { "raw": "{{base_url}}/v1/chat/{{chat_id}}/messages/{{message_id}}/feedback", "host": ["{{base_url}}"], "path": ["v1", "chat", "{{chat_id}}", "messages", "{{message_id}}", "feedback"] },
+            "description": "Toggle feedback from positive to negative."
+          }
+        },
+        {
+          "name": "Clear Feedback (null)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Feedback is cleared', function () {",
+                  "    pm.expect(pm.response.json().feedback).to.be.null;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\n  \"feedback\": null\n}" },
+            "url": { "raw": "{{base_url}}/v1/chat/{{chat_id}}/messages/{{message_id}}/feedback", "host": ["{{base_url}}"], "path": ["v1", "chat", "{{chat_id}}", "messages", "{{message_id}}", "feedback"] },
+            "description": "Clear feedback by sending null."
+          }
+        },
+        {
+          "name": "Feedback on User Message (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 422', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "pm.test('Error rejects feedback on user message', function () {",
+                  "    pm.expect(pm.response.json().detail).to.include('assistant');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\n  \"feedback\": \"positive\"\n}" },
+            "url": { "raw": "{{base_url}}/v1/chat/{{chat_id}}/messages/{{user_message_id}}/feedback", "host": ["{{base_url}}"], "path": ["v1", "chat", "{{chat_id}}", "messages", "{{user_message_id}}", "feedback"] },
+            "description": "Feedback on a user message should return 422."
           }
         }
       ]
