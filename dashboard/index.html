@@ -381,8 +381,9 @@
                   <textarea x-model="form.content" class="form-input" rows="6" placeholder="Paste your knowledge base text..."></textarea>
                 </div>
                 <div x-show="form.source_type === 'url'">
-                  <label class="form-label">URL</label>
-                  <input x-model="form.config.url" class="form-input" placeholder="https://...">
+                  <label class="form-label">URLs <span class="text-xs opacity-60">(one per line, or comma-separated)</span></label>
+                  <textarea x-model="form.config.urls" class="form-input" rows="4"
+                            placeholder="https://example.com/page1&#10;https://example.com/page2"></textarea>
                 </div>
                 <div x-show="form.source_type === 'upload'">
                   <label class="form-label">Files</label>
@@ -947,6 +948,10 @@
             await this.uploadSource();
             return;
           }
+          if (this.form.source_type === 'url') {
+            await this.createUrlSources();
+            return;
+          }
           this.saving = true;
           try {
             const data = {
@@ -956,8 +961,6 @@
             };
             if (this.form.source_type === 'text') {
               data.content = this.form.content;
-            } else if (this.form.source_type === 'url') {
-              data.config = { url: this.form.config.url };
             }
             await API.createSource(data);
             Alpine.store('toast').success('Source created');
@@ -966,6 +969,47 @@
             await this.load();
           } catch (e) { Alpine.store('toast').error(e.message); }
           this.saving = false;
+        },
+
+        async createUrlSources() {
+          const raw = (this.form.config.urls || '').replace(/,/g, '\n');
+          const urls = raw.split('\n').map(u => u.trim()).filter(u => u.length > 0);
+          if (urls.length === 0) {
+            Alpine.store('toast').error('Please enter at least one URL.');
+            return;
+          }
+          this.saving = true;
+          let succeeded = 0;
+          let failed = 0;
+          for (const url of urls) {
+            try {
+              let name = this.form.name;
+              if (!name) {
+                try { const u = new URL(url); name = u.hostname + u.pathname; } catch { name = url; }
+              } else if (urls.length > 1) {
+                try { const u = new URL(url); name = `${this.form.name} — ${u.hostname}${u.pathname}`; } catch { name = `${this.form.name} — ${url}`; }
+              }
+              const source = await API.createSource({
+                bot_profile_id: this.form.bot_profile_id,
+                name,
+                source_type: 'url',
+                config: { url },
+              });
+              await API.triggerIngest(source.id);
+              succeeded++;
+            } catch (e) {
+              failed++;
+              Alpine.store('toast').error(`${url}: ${e.message}`);
+            }
+          }
+          this.saving = false;
+          if (succeeded > 0) {
+            const msg = succeeded === 1 ? 'Source created & ingestion started' : `${succeeded} sources created & ingestion started`;
+            Alpine.store('toast').success(failed > 0 ? `${msg} (${failed} failed)` : msg);
+            this.showCreate = false;
+            this.form = { bot_profile_id: '', name: '', source_type: 'text', content: '', config: {} };
+            await this.load();
+          }
         },
 
         async uploadSource() {
