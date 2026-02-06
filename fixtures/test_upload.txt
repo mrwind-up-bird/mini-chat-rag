@@ -1,0 +1,1 @@
+MiniRAG is a modular RAG platform that supports multi-tenancy and provides strict data isolation between tenants. It uses FastAPI, SQLModel, PostgreSQL, Qdrant, and Redis for a complete knowledge-base-powered chat experience.
