@@ -2,16 +2,18 @@
 
 import json
 import uuid
+from pathlib import Path
 
 from arq.connections import ArqRedis, create_pool
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 from sqlmodel import select
 
 from app.api.deps import Auth, Session
 from app.models.base import utcnow
 from app.models.bot_profile import BotProfile
-from app.models.source import Source, SourceCreate, SourceRead, SourceStatus, SourceUpdate
+from app.models.source import Source, SourceCreate, SourceRead, SourceStatus, SourceType, SourceUpdate
+from app.services.extract import ALLOWED_EXTENSIONS, MAX_FILE_SIZE, extract_text
 from app.workers.main import _redis_settings
 
 router = APIRouter(prefix="/sources", tags=["sources"])
@@ -75,6 +77,69 @@ async def list_sources(
 
     result = await session.execute(stmt)
     return [_to_read(s) for s in result.scalars().all()]
+
+
+@router.post("/upload", response_model=SourceRead, status_code=status.HTTP_201_CREATED)
+async def upload_source(
+    file: UploadFile,
+    auth: Auth,
+    session: Session,
+    bot_profile_id: uuid.UUID = Form(...),
+    name: str | None = Form(None),
+    description: str = Form(""),
+) -> SourceRead:
+    """Upload a file, extract text, create Source, and auto-trigger ingestion."""
+    # Validate extension
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Unsupported file type: {ext}. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
+        )
+
+    content = await file.read()
+
+    # Validate size
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024 * 1024)} MB.",
+        )
+
+    # Verify bot profile ownership
+    await _verify_bot_profile(bot_profile_id, auth.tenant_id, session)
+
+    # Extract text
+    extracted = extract_text(file.filename or "file.txt", content)
+
+    src = Source(
+        tenant_id=auth.tenant_id,
+        bot_profile_id=bot_profile_id,
+        name=name or file.filename or "Uploaded file",
+        description=description,
+        source_type=SourceType.UPLOAD,
+        config=json.dumps({"original_filename": file.filename, "file_size": len(content)}),
+        content=extracted,
+    )
+    session.add(src)
+    await session.commit()
+    await session.refresh(src)
+
+    # Auto-trigger ingestion
+    try:
+        redis: ArqRedis = await create_pool(_redis_settings())
+        try:
+            await redis.enqueue_job(
+                "ingest_source",
+                source_id=str(src.id),
+                tenant_id=str(auth.tenant_id),
+            )
+        finally:
+            await redis.aclose()
+    except Exception:
+        pass  # Source is created; ingestion can be triggered manually
+
+    return _to_read(src)
 
 
 @router.get("/{source_id}", response_model=SourceRead)

@@ -28,6 +28,10 @@ dependencies = [
     "email-validator>=2.1,<3",
     # HTTP client (for LLM calls)
     "httpx>=0.28,<1",
+    # File upload & extraction
+    "python-multipart>=0.0.9,<1",
+    "pypdf>=5.0,<6",
+    "python-docx>=1.1,<2",
 ]
 
 [project.optional-dependencies]

@@ -360,9 +360,59 @@
                   <label class="form-label">URL</label>
                   <input x-model="form.config.url" class="form-input" placeholder="https://...">
                 </div>
+                <div x-show="form.source_type === 'upload'">
+                  <label class="form-label">File</label>
+                  <div class="drop-zone"
+                       :class="{ 'dragover': dragover }"
+                       @click="$refs.fileInput.click()"
+                       @dragover.prevent="dragover = true"
+                       @dragleave.prevent="dragover = false"
+                       @drop.prevent="dragover = false; handleFileDrop($event)">
+                    <template x-if="!uploadFile">
+                      <div class="text-center">
+                        <div class="drop-zone-icon">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none"
+                               stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                          </svg>
+                        </div>
+                        <p class="drop-zone-text">Drop file here or click to browse</p>
+                        <p class="text-xs mt-1" style="color: rgba(255,255,255,0.3);">PDF, DOCX, TXT, MD, CSV (max 10 MB)</p>
+                      </div>
+                    </template>
+                    <template x-if="uploadFile">
+                      <div class="file-preview">
+                        <div class="flex items-center gap-3">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                               style="color: #a78bfa; flex-shrink: 0;">
+                            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                          </svg>
+                          <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium text-white truncate" x-text="uploadFile.name"></p>
+                            <p class="text-xs" style="color: rgba(255,255,255,0.4);" x-text="formatFileSize(uploadFile.size)"></p>
+                          </div>
+                          <button type="button" @click.stop="uploadFile = null" class="modal-close text-sm">&times;</button>
+                        </div>
+                      </div>
+                    </template>
+                    <input type="file" x-ref="fileInput" class="hidden"
+                           accept=".pdf,.docx,.txt,.md,.csv"
+                           @change="handleFileSelect($event)">
+                  </div>
+                </div>
+                <template x-if="uploading">
+                  <div class="upload-progress"><div class="upload-progress-bar"></div></div>
+                </template>
                 <div class="flex justify-end gap-2">
                   <button type="button" @click="showCreate = false" class="btn-secondary">Cancel</button>
-                  <button type="submit" class="btn-primary" :disabled="saving">Create</button>
+                  <button type="submit" class="btn-primary" :disabled="saving || uploading">
+                    <span x-show="!uploading" x-text="form.source_type === 'upload' ? 'Upload' : 'Create'"></span>
+                    <span x-show="uploading" class="flex items-center gap-2"><span class="spinner"></span> Uploading...</span>
+                  </button>
                 </div>
               </form>
             </div>
@@ -779,6 +829,9 @@
         showCreate: false,
         saving: false,
         form: { bot_profile_id: '', name: '', source_type: 'text', content: '', config: {} },
+        uploadFile: null,
+        uploading: false,
+        dragover: false,
 
         async load() {
           this.loading = true;
@@ -791,7 +844,41 @@
           this.loading = false;
         },
 
+        handleFileSelect(event) {
+          const file = event.target.files[0];
+          if (file) this.validateAndSetFile(file);
+        },
+
+        handleFileDrop(event) {
+          const file = event.dataTransfer.files[0];
+          if (file) this.validateAndSetFile(file);
+        },
+
+        validateAndSetFile(file) {
+          const allowed = ['.pdf', '.docx', '.txt', '.md', '.csv'];
+          const ext = '.' + file.name.split('.').pop().toLowerCase();
+          if (!allowed.includes(ext)) {
+            Alpine.store('toast').error(`Unsupported file type: ${ext}`);
+            return;
+          }
+          if (file.size > 10 * 1024 * 1024) {
+            Alpine.store('toast').error('File too large. Maximum 10 MB.');
+            return;
+          }
+          this.uploadFile = file;
+        },
+
+        formatFileSize(bytes) {
+          if (bytes < 1024) return bytes + ' B';
+          if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+          return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        },
+
         async createSource() {
+          if (this.form.source_type === 'upload') {
+            await this.uploadSource();
+            return;
+          }
           this.saving = true;
           try {
             const data = {
@@ -811,6 +898,32 @@
             await this.load();
           } catch (e) { Alpine.store('toast').error(e.message); }
           this.saving = false;
+        },
+
+        async uploadSource() {
+          if (!this.uploadFile) {
+            Alpine.store('toast').error('Please select a file.');
+            return;
+          }
+          if (!this.form.bot_profile_id) {
+            Alpine.store('toast').error('Please select a bot profile.');
+            return;
+          }
+          this.uploading = true;
+          try {
+            const fd = new FormData();
+            fd.append('file', this.uploadFile);
+            fd.append('bot_profile_id', this.form.bot_profile_id);
+            if (this.form.name) fd.append('name', this.form.name);
+            if (this.form.description) fd.append('description', this.form.description);
+            await API.uploadSource(fd);
+            Alpine.store('toast').success('File uploaded & ingestion started');
+            this.showCreate = false;
+            this.uploadFile = null;
+            this.form = { bot_profile_id: '', name: '', source_type: 'text', content: '', config: {} };
+            await this.load();
+          } catch (e) { Alpine.store('toast').error(e.message); }
+          this.uploading = false;
         },
 
         async ingest(src) {

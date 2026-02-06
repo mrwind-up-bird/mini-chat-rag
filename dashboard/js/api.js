@@ -99,6 +99,24 @@ const API = {
   triggerIngest(id) {
     return this.post(`/v1/sources/${id}/ingest`);
   },
+  async uploadSource(formData) {
+    const headers = {};
+    const token = this.getToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const resp = await fetch(`${this.baseUrl}/v1/sources/upload`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    if (resp.status === 401) {
+      this.clearToken();
+      window.dispatchEvent(new CustomEvent('minirag:unauthorized'));
+      throw new Error('Unauthorized');
+    }
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || `HTTP ${resp.status}`);
+    return data;
+  },
 
   // ── Chat ──────────────────────────────────────────────
   listChats(botProfileId = null, limit = 50, offset = 0) {
