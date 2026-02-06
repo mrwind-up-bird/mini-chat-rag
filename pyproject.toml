@@ -1,0 +1,60 @@
+[project]
+name = "minirag"
+version = "0.1.0"
+description = "Modular, provider-agnostic RAG platform with multi-tenancy"
+requires-python = ">=3.11"
+dependencies = [
+    # Web framework
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.32,<1",
+    # Database
+    "sqlmodel>=0.0.22,<1",
+    "asyncpg>=0.30,<1",
+    "alembic>=1.14,<2",
+    # Vector DB
+    "qdrant-client>=1.12,<2",
+    # LLM abstraction
+    "litellm>=1.55,<2",
+    # Task queue
+    "arq>=0.26,<1",
+    "redis>=5.2,<6",
+    # Security
+    "passlib[argon2]>=1.7,<2",
+    "python-jose[cryptography]>=3.3,<4",
+    "cryptography>=44,<45",
+    # Config
+    "pydantic-settings>=2.7,<3",
+    # Validation
+    "email-validator>=2.1,<3",
+    # HTTP client (for LLM calls)
+    "httpx>=0.28,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+    "pytest-asyncio>=0.24,<1",
+    "httpx>=0.28,<1",
+    "ruff>=0.8,<1",
+    "aiosqlite>=0.20,<1",
+    "greenlet>=3,<4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 99
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "S", "B"]
+ignore = ["S101"]  # allow assert in tests
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
