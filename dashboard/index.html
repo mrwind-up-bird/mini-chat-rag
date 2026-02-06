@@ -11,6 +11,8 @@
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
   <link rel="stylesheet" href="/dashboard/css/app.css">
   <script src="/dashboard/js/api.js"></script>
   <script src="/dashboard/js/app.js"></script>
@@ -265,7 +267,7 @@
           <!-- Try It chat panel -->
           <div x-show="tryingBot" class="modal-backdrop"
                @click.self="tryingBot = null">
-            <div class="modal-content" style="max-width: 36rem;">
+            <div class="modal-content" style="max-width: 48rem;">
               <div class="flex items-center justify-between p-4" style="border-bottom: 1px solid rgba(255,255,255,0.08);">
                 <h3 class="font-bold" x-text="'Chat with ' + (tryingBot?.name || '')"></h3>
                 <button @click="tryingBot = null; tryChatId = null; tryMessages = []" class="modal-close">&times;</button>
@@ -279,7 +281,7 @@
                       </template>
                       <template x-if="msg.role !== 'user'">
                         <div class="chat-bubble-actions-wrap">
-                          <div class="chat-bubble-bot" x-text="msg.content"></div>
+                          <div class="chat-bubble-bot markdown-body" x-html="renderMarkdown(msg.content)"></div>
                           <div class="chat-actions" x-show="msg.id">
                             <button class="chat-action-btn" title="Copy"
                                     @click="copyToClipboard(msg.content); $store.toast.success('Copied to clipboard')">
@@ -481,7 +483,7 @@
 
           <!-- Chat detail modal -->
           <div x-show="selectedChat" class="modal-backdrop" @click.self="selectedChat = null; messages = []">
-            <div class="modal-content" style="max-width:600px;">
+            <div class="modal-content" style="max-width:48rem;">
               <div class="p-4 flex items-center justify-between" style="border-bottom: 1px solid rgba(255,255,255,0.08);">
                 <h3 class="font-bold" x-text="selectedChat?.title"></h3>
                 <button @click="selectedChat = null; messages = []" class="modal-close">&times;</button>
@@ -494,7 +496,7 @@
                     </template>
                     <template x-if="m.role !== 'user'">
                       <div class="chat-bubble-actions-wrap">
-                        <div class="chat-bubble-bot" x-text="m.content"></div>
+                        <div class="chat-bubble-bot markdown-body" x-html="renderMarkdown(m.content)"></div>
                         <div class="chat-actions">
                           <button class="chat-action-btn" title="Copy"
                                   @click="copyToClipboard(m.content); $store.toast.success('Copied to clipboard')">

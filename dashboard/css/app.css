@@ -603,7 +603,7 @@ input[type="range"]::-webkit-slider-thumb {
 .chat-inline {
   display: flex;
   flex-direction: column;
-  height: 500px;
+  height: 560px;
   overflow: hidden;
 }
 
@@ -642,10 +642,100 @@ input[type="range"]::-webkit-slider-thumb {
   border-radius: 16px 16px 16px 4px;
   max-width: 80%;
   font-size: 0.875rem;
-  white-space: pre-wrap;
   word-break: break-word;
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
+
+/* ── Markdown inside bot bubbles ──────────────────────────── */
+.chat-bubble-bot.markdown-body p { margin: 0 0 0.5em; }
+.chat-bubble-bot.markdown-body p:last-child { margin-bottom: 0; }
+
+.chat-bubble-bot.markdown-body h1,
+.chat-bubble-bot.markdown-body h2,
+.chat-bubble-bot.markdown-body h3,
+.chat-bubble-bot.markdown-body h4 {
+  font-weight: 600;
+  margin: 0.75em 0 0.35em;
+  color: rgba(255, 255, 255, 0.95);
+}
+.chat-bubble-bot.markdown-body h1 { font-size: 1.15em; }
+.chat-bubble-bot.markdown-body h2 { font-size: 1.05em; }
+.chat-bubble-bot.markdown-body h3 { font-size: 0.95em; }
+.chat-bubble-bot.markdown-body h1:first-child,
+.chat-bubble-bot.markdown-body h2:first-child,
+.chat-bubble-bot.markdown-body h3:first-child { margin-top: 0; }
+
+.chat-bubble-bot.markdown-body ul,
+.chat-bubble-bot.markdown-body ol {
+  margin: 0.4em 0;
+  padding-left: 1.4em;
+}
+.chat-bubble-bot.markdown-body li { margin: 0.15em 0; }
+
+.chat-bubble-bot.markdown-body code {
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 0.8em;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.chat-bubble-bot.markdown-body pre {
+  margin: 0.5em 0;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.chat-bubble-bot.markdown-body pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.8em;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.chat-bubble-bot.markdown-body blockquote {
+  margin: 0.5em 0;
+  padding: 0.25em 0.75em;
+  border-left: 3px solid rgba(139, 92, 246, 0.4);
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.chat-bubble-bot.markdown-body hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 0.75em 0;
+}
+
+.chat-bubble-bot.markdown-body a {
+  color: #a78bfa;
+  text-decoration: underline;
+}
+
+.chat-bubble-bot.markdown-body table {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  font-size: 0.85em;
+  width: 100%;
+}
+
+.chat-bubble-bot.markdown-body th,
+.chat-bubble-bot.markdown-body td {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 4px 8px;
+  text-align: left;
+}
+
+.chat-bubble-bot.markdown-body th {
+  background: rgba(255, 255, 255, 0.05);
+  font-weight: 600;
+}
+
+.chat-bubble-bot.markdown-body strong { color: rgba(255, 255, 255, 0.95); }
 
 /* ── Chat Actions ─────────────────────────────────────────── */
 .chat-bubble-actions-wrap {

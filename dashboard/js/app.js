@@ -87,3 +87,9 @@ function copyToClipboard(text) {
     () => Alpine.store('toast').error('Failed to copy'),
   );
 }
+
+function renderMarkdown(text) {
+  if (!text) return '';
+  const html = marked.parse(text, { breaks: true });
+  return DOMPurify.sanitize(html);
+}
