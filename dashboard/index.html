@@ -329,67 +329,39 @@
                 <th>Name</th><th>Bot</th><th>Type</th><th>Status</th><th>Chunks</th><th>Created</th><th></th>
               </tr></thead>
               <tbody>
-                <template x-for="src in sources" :key="src.id">
-                  <template x-if="true">
-                    <tr>
-                      <td class="font-medium text-white">
-                        <div class="flex items-center gap-2">
-                          <template x-if="src.children_count > 0">
-                            <button @click="toggleExpand(src)" class="p-0.5 rounded hover:bg-white/10 transition-transform"
-                                    :style="expandedParents[src.id] ? 'transform:rotate(90deg)' : ''">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="9 18 15 12 9 6"/>
-                              </svg>
-                            </button>
-                          </template>
-                          <span x-text="src.name"></span>
-                          <template x-if="src.children_count > 0">
-                            <span class="badge badge-member text-xs" x-text="src.children_count + ' items'"></span>
-                          </template>
-                        </div>
-                      </td>
-                      <td class="text-xs" style="color: rgba(255,255,255,0.5);" x-text="botName(src.bot_profile_id)"></td>
-                      <td><span class="badge badge-member" x-text="src.source_type"></span></td>
-                      <td><span :class="'badge badge-' + src.status" x-text="src.status"></span></td>
-                      <td x-text="src.chunk_count"></td>
-                      <td class="text-xs" style="color: rgba(255,255,255,0.4);" x-text="formatDate(src.created_at)"></td>
-                      <td class="text-right space-x-1">
-                        <template x-if="src.children_count > 0">
-                          <button @click="ingestChildren(src)" class="btn-success btn-sm"
-                                  :disabled="src.status === 'processing'">Ingest All</button>
-                        </template>
-                        <template x-if="src.children_count === 0">
-                          <button @click="ingest(src)" class="btn-success btn-sm"
-                                  :disabled="src.status === 'processing'">Ingest</button>
-                        </template>
-                        <button @click="confirmDelete(src)" class="btn-danger btn-sm">Delete</button>
-                      </td>
-                    </tr>
-                  </template>
-                </template>
-                <!-- Child rows (shown when parent is expanded) -->
-                <template x-for="src in sources" :key="'children-' + src.id">
-                  <template x-if="src.children_count > 0 && expandedParents[src.id] && childrenMap[src.id]">
-                    <template x-for="child in childrenMap[src.id]" :key="child.id">
-                      <tr style="background: rgba(255,255,255,0.02);">
-                        <td class="font-medium text-white" style="padding-left: 2.5rem;">
-                          <span style="color: rgba(255,255,255,0.25); margin-right: 0.5rem;">&#8627;</span>
-                          <span x-text="child.name"></span>
-                        </td>
-                        <td class="text-xs" style="color: rgba(255,255,255,0.5);" x-text="botName(child.bot_profile_id)"></td>
-                        <td><span class="badge badge-member" x-text="child.source_type"></span></td>
-                        <td><span :class="'badge badge-' + child.status" x-text="child.status"></span></td>
-                        <td x-text="child.chunk_count"></td>
-                        <td class="text-xs" style="color: rgba(255,255,255,0.4);" x-text="formatDate(child.created_at)"></td>
-                        <td class="text-right space-x-1">
-                          <button @click="ingest(child)" class="btn-success btn-sm"
-                                  :disabled="child.status === 'processing'">Ingest</button>
-                          <button @click="confirmDeleteChild(child, src)" class="btn-danger btn-sm">Delete</button>
-                        </td>
-                      </tr>
-                    </template>
-                  </template>
+                <template x-for="row in displayRows" :key="row._key">
+                  <tr :style="row._isChild ? 'background: rgba(255,255,255,0.02)' : ''">
+                    <td class="font-medium text-white">
+                      <div class="flex items-center gap-2" :style="row._isChild ? 'padding-left: 1.5rem' : ''">
+                        <button x-show="row.children_count > 0" @click="toggleExpand(row)"
+                                class="p-0.5 rounded hover:bg-white/10 transition-transform flex-shrink-0"
+                                :style="expandedParents[row.id] ? 'transform:rotate(90deg)' : ''">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6"/>
+                          </svg>
+                        </button>
+                        <span x-show="row._isChild" style="color: rgba(255,255,255,0.25); margin-right: 0.25rem;">&#8627;</span>
+                        <span x-text="truncate(row.name, 50)" :title="row.name"></span>
+                        <span x-show="row.children_count > 0" class="badge badge-member text-xs" x-text="row.children_count + ' items'"></span>
+                      </div>
+                    </td>
+                    <td class="text-xs" style="color: rgba(255,255,255,0.5);" x-text="botName(row.bot_profile_id)"></td>
+                    <td><span class="badge badge-member" x-text="row.source_type"></span></td>
+                    <td><span :class="'badge badge-' + row.status" x-text="row.status"></span></td>
+                    <td x-text="row.chunk_count"></td>
+                    <td class="text-xs" style="color: rgba(255,255,255,0.4);" x-text="formatDate(row.created_at)"></td>
+                    <td class="text-right space-x-1">
+                      <button x-show="row.children_count > 0" @click="ingestChildren(row)" class="btn-success btn-sm"
+                              :disabled="row.status === 'processing'">Ingest All</button>
+                      <button x-show="!row._isChild && row.children_count === 0" @click="ingest(row)" class="btn-success btn-sm"
+                              :disabled="row.status === 'processing'">Ingest</button>
+                      <button x-show="row._isChild" @click="ingest(row)" class="btn-success btn-sm"
+                              :disabled="row.status === 'processing'">Ingest</button>
+                      <button x-show="!row._isChild" @click="confirmDelete(row)" class="btn-danger btn-sm">Delete</button>
+                      <button x-show="row._isChild" @click="confirmDeleteChild(row)" class="btn-danger btn-sm">Delete</button>
+                    </td>
+                  </tr>
                 </template>
               </tbody>
             </table>
@@ -944,6 +916,19 @@
         childrenMap: {},
         expandedParents: {},
 
+        get displayRows() {
+          const rows = [];
+          for (const src of this.sources) {
+            rows.push({ ...src, _isChild: false, _key: src.id });
+            if (src.children_count > 0 && this.expandedParents[src.id] && this.childrenMap[src.id]) {
+              for (const child of this.childrenMap[src.id]) {
+                rows.push({ ...child, _isChild: true, _parentId: src.id, _key: 'child-' + child.id });
+              }
+            }
+          }
+          return rows;
+        },
+
         botName(bpId) {
           const bp = this.botProfiles.find(b => b.id === bpId);
           return bp ? bp.name : '—';
@@ -1200,14 +1185,15 @@
           } catch (e) { Alpine.store('toast').error(e.message); }
         },
 
-        async confirmDeleteChild(child, parent) {
+        async confirmDeleteChild(child) {
           if (!confirm(`Delete "${child.name}"?`)) return;
           try {
             await API.deleteSource(child.id);
             Alpine.store('toast').success('Source deleted');
             // Refresh parent's children
-            if (this.expandedParents[parent.id]) {
-              this.childrenMap[parent.id] = await API.listSourceChildren(parent.id);
+            const parentId = child._parentId;
+            if (parentId && this.expandedParents[parentId]) {
+              this.childrenMap[parentId] = await API.listSourceChildren(parentId);
             }
             await this.load();
           } catch (e) { Alpine.store('toast').error(e.message); }
