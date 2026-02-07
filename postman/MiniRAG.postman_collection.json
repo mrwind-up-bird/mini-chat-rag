@@ -42,7 +42,8 @@
     { "key": "token_id",     "value": "", "type": "string" },
     { "key": "uploaded_source_id", "value": "", "type": "string" },
     { "key": "message_id", "value": "", "type": "string" },
-    { "key": "user_message_id", "value": "", "type": "string" }
+    { "key": "user_message_id", "value": "", "type": "string" },
+    { "key": "batch_parent_id", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -832,6 +833,231 @@
             "url": { "raw": "{{base_url}}/v1/sources", "host": ["{{base_url}}"], "path": ["v1", "sources"] },
             "description": "Creating a source with a nonexistent bot_profile_id should return 422."
           }
+        },
+        {
+          "name": "Batch Create Sources (parent + children)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var profileId = pm.collectionVariables.get('profile_id');",
+                  "var body = {",
+                  "    bot_profile_id: profileId,",
+                  "    name: 'Docs Collection',",
+                  "    source_type: 'url',",
+                  "    children: [",
+                  "        { name: 'Page 1', source_type: 'url', config: { url: 'https://example.com/page1' } },",
+                  "        { name: 'Page 2', source_type: 'url', config: { url: 'https://example.com/page2' } },",
+                  "        { name: 'Page 3', source_type: 'url', config: { url: 'https://example.com/page3' } }",
+                  "    ]",
+                  "};",
+                  "pm.request.body.raw = JSON.stringify(body);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Response has parent and children', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('parent');",
+                  "    pm.expect(json).to.have.property('children');",
+                  "    pm.expect(json.parent.name).to.eql('Docs Collection');",
+                  "    pm.expect(json.parent.parent_id).to.be.null;",
+                  "    pm.expect(json.parent.children_count).to.eql(3);",
+                  "});",
+                  "pm.test('Children reference parent', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.children).to.be.an('array').with.length(3);",
+                  "    json.children.forEach(function(c) {",
+                  "        pm.expect(c.parent_id).to.eql(json.parent.id);",
+                  "    });",
+                  "});",
+                  "pm.collectionVariables.set('batch_parent_id', pm.response.json().parent.id);",
+                  "console.log('Saved batch_parent_id: ' + pm.response.json().parent.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": { "raw": "{{base_url}}/v1/sources/batch", "host": ["{{base_url}}"], "path": ["v1", "sources", "batch"] },
+            "description": "Create a parent source with multiple children in one transaction."
+          }
+        },
+        {
+          "name": "Batch Create — Empty Children (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 422', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\n  \"bot_profile_id\": \"{{profile_id}}\",\n  \"name\": \"Empty Batch\",\n  \"source_type\": \"url\",\n  \"children\": []\n}" },
+            "url": { "raw": "{{base_url}}/v1/sources/batch", "host": ["{{base_url}}"], "path": ["v1", "sources", "batch"] },
+            "description": "Batch create with no children should return 422."
+          }
+        },
+        {
+          "name": "List Source Children",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Returns 3 children', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json).to.be.an('array').with.length(3);",
+                  "});",
+                  "pm.test('Children belong to parent', function () {",
+                  "    var parentId = pm.collectionVariables.get('batch_parent_id');",
+                  "    pm.response.json().forEach(function(c) {",
+                  "        pm.expect(c.parent_id).to.eql(parentId);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/v1/sources/{{batch_parent_id}}/children", "host": ["{{base_url}}"], "path": ["v1", "sources", "{{batch_parent_id}}", "children"] },
+            "description": "List child sources of a parent, ordered by created_at asc."
+          }
+        },
+        {
+          "name": "Get Parent Source (aggregated)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Parent has aggregated fields', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.children_count).to.eql(3);",
+                  "    pm.expect(json.parent_id).to.be.null;",
+                  "    pm.expect(['pending', 'processing', 'ready', 'error']).to.include(json.status);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/v1/sources/{{batch_parent_id}}", "host": ["{{base_url}}"], "path": ["v1", "sources", "{{batch_parent_id}}"] },
+            "description": "Get a parent source — status and chunk_count are aggregated from children."
+          }
+        },
+        {
+          "name": "List Sources — Top-level Only (default)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('No child sources in default listing', function () {",
+                  "    pm.response.json().forEach(function(s) {",
+                  "        pm.expect(s.parent_id).to.be.null;",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/v1/sources", "host": ["{{base_url}}"], "path": ["v1", "sources"] },
+            "description": "Default listing returns only top-level sources (parent_id is null)."
+          }
+        },
+        {
+          "name": "List Sources — Include Children",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Flat list includes children', function () {",
+                  "    var json = pm.response.json();",
+                  "    var hasChild = json.some(function(s) { return s.parent_id !== null; });",
+                  "    pm.expect(hasChild).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/v1/sources?include_children=true", "host": ["{{base_url}}"], "path": ["v1", "sources"], "query": [{ "key": "include_children", "value": "true" }] },
+            "description": "Flat listing of all sources including children."
+          }
+        },
+        {
+          "name": "Ingest Children",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 202 Accepted', function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});",
+                  "pm.test('Response confirms enqueued count', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.status).to.eql('accepted');",
+                  "    pm.expect(json).to.have.property('enqueued');",
+                  "    pm.expect(json.enqueued).to.eql(3);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{base_url}}/v1/sources/{{batch_parent_id}}/ingest-children", "host": ["{{base_url}}"], "path": ["v1", "sources", "{{batch_parent_id}}", "ingest-children"] },
+            "description": "Enqueue ingestion jobs for all non-processing children of a parent source."
+          }
         }
       ]
     },
@@ -1132,6 +1358,53 @@
       "name": "6 — Cleanup",
       "description": "Cleanup: soft-delete resources created during the test run.",
       "item": [
+        {
+          "name": "Delete Batch Parent (cascades children)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 204', function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{base_url}}/v1/sources/{{batch_parent_id}}", "host": ["{{base_url}}"], "path": ["v1", "sources", "{{batch_parent_id}}"] },
+            "description": "Delete the batch parent source. Children are cascade soft-deleted."
+          }
+        },
+        {
+          "name": "Verify Batch Parent Deleted",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Parent is soft-deleted', function () {",
+                  "    pm.expect(pm.response.json().is_active).to.be.false;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/v1/sources/{{batch_parent_id}}", "host": ["{{base_url}}"], "path": ["v1", "sources", "{{batch_parent_id}}"] },
+            "description": "Verify the batch parent was soft-deleted."
+          }
+        },
         {
           "name": "Delete Uploaded Source (Soft)",
           "event": [
