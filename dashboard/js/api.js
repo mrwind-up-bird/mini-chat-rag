@@ -99,6 +99,15 @@ const API = {
   triggerIngest(id) {
     return this.post(`/v1/sources/${id}/ingest`);
   },
+  listSourceChildren(parentId) {
+    return this.get(`/v1/sources/${parentId}/children`);
+  },
+  createBatchSource(data) {
+    return this.post('/v1/sources/batch', data);
+  },
+  triggerIngestChildren(parentId) {
+    return this.post(`/v1/sources/${parentId}/ingest-children`);
+  },
   async uploadSource(formData) {
     const headers = {};
     const token = this.getToken();

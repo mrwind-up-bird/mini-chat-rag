@@ -4,8 +4,8 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlmodel import Column, Field, SQLModel
 from sqlalchemy import Text
+from sqlmodel import Column, Field, SQLModel
 
 from app.models.base import TimestampMixin, new_uuid
 
@@ -29,6 +29,9 @@ class Source(TimestampMixin, SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=new_uuid, primary_key=True)
     tenant_id: uuid.UUID = Field(foreign_key="tenants.id", nullable=False, index=True)
     bot_profile_id: uuid.UUID = Field(foreign_key="bot_profiles.id", nullable=False, index=True)
+    parent_id: uuid.UUID | None = Field(
+        default=None, foreign_key="sources.id", nullable=True, index=True,
+    )
 
     name: str = Field(max_length=255, nullable=False)
     description: str = Field(default="", max_length=1000)
@@ -59,6 +62,7 @@ class SourceCreate(SQLModel):
     source_type: SourceType
     config: dict = Field(default_factory=dict)
     content: str | None = None
+    parent_id: uuid.UUID | None = None
 
 
 class SourceUpdate(SQLModel):
@@ -73,6 +77,7 @@ class SourceRead(SQLModel):
     id: uuid.UUID
     tenant_id: uuid.UUID
     bot_profile_id: uuid.UUID
+    parent_id: uuid.UUID | None = None
     name: str
     description: str
     source_type: SourceType
@@ -82,5 +87,6 @@ class SourceRead(SQLModel):
     chunk_count: int
     error_message: str | None
     is_active: bool
+    children_count: int = 0
     created_at: datetime
     updated_at: datetime
