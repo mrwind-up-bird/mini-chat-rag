@@ -323,6 +323,36 @@
             <button @click="showCreate = true" class="btn-primary">+ New Source</button>
           </div>
 
+          <!-- Search & Filters -->
+          <div class="flex flex-wrap items-center gap-3 mb-4">
+            <div class="flex-1 min-w-[200px]">
+              <input type="text" x-model="searchQuery" class="form-input" placeholder="Search by name..."
+                     @input.debounce.200ms="">
+            </div>
+            <select x-model="filterBot" class="form-input" style="width: auto; min-width: 140px;">
+              <option value="">All Bots</option>
+              <template x-for="bp in botProfiles" :key="bp.id">
+                <option :value="bp.id" x-text="bp.name"></option>
+              </template>
+            </select>
+            <select x-model="filterType" class="form-input" style="width: auto; min-width: 120px;">
+              <option value="">All Types</option>
+              <option value="text">Text</option>
+              <option value="url">URL</option>
+              <option value="upload">Upload</option>
+            </select>
+            <select x-model="filterStatus" class="form-input" style="width: auto; min-width: 130px;">
+              <option value="">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="processing">Processing</option>
+              <option value="ready">Ready</option>
+              <option value="error">Error</option>
+            </select>
+            <button x-show="searchQuery || filterBot || filterType || filterStatus"
+                    @click="searchQuery = ''; filterBot = ''; filterType = ''; filterStatus = ''"
+                    class="btn-secondary btn-sm" style="white-space: nowrap;">Clear</button>
+          </div>
+
           <div class="glass-table-wrap">
             <table class="data-table">
               <thead><tr>
@@ -365,8 +395,8 @@
                 </template>
               </tbody>
             </table>
-            <div x-show="sources.length === 0 && !loading" class="empty-state">
-              <p>No sources yet.</p>
+            <div x-show="displayRows.length === 0 && !loading" class="empty-state">
+              <p x-text="sources.length === 0 ? 'No sources yet.' : 'No sources match your filters.'"></p>
             </div>
           </div>
 
@@ -915,13 +945,45 @@
         dragover: false,
         childrenMap: {},
         expandedParents: {},
+        searchQuery: '',
+        filterBot: '',
+        filterType: '',
+        filterStatus: '',
+
+        get filteredSources() {
+          let result = this.sources;
+          const q = this.searchQuery.toLowerCase().trim();
+          if (q) {
+            result = result.filter(s => {
+              if (s.name.toLowerCase().includes(q)) return true;
+              // Also match if any child name matches (for parents)
+              const children = this.childrenMap[s.id];
+              if (children) return children.some(c => c.name.toLowerCase().includes(q));
+              return false;
+            });
+          }
+          if (this.filterBot) {
+            result = result.filter(s => s.bot_profile_id === this.filterBot);
+          }
+          if (this.filterType) {
+            result = result.filter(s => s.source_type === this.filterType);
+          }
+          if (this.filterStatus) {
+            result = result.filter(s => s.status === this.filterStatus);
+          }
+          return result;
+        },
 
         get displayRows() {
           const rows = [];
-          for (const src of this.sources) {
+          const q = this.searchQuery.toLowerCase().trim();
+          for (const src of this.filteredSources) {
             rows.push({ ...src, _isChild: false, _key: src.id });
             if (src.children_count > 0 && this.expandedParents[src.id] && this.childrenMap[src.id]) {
-              for (const child of this.childrenMap[src.id]) {
+              let children = this.childrenMap[src.id];
+              // Filter children by search query too
+              if (q) children = children.filter(c => c.name.toLowerCase().includes(q));
+              for (const child of children) {
                 rows.push({ ...child, _isChild: true, _parentId: src.id, _key: 'child-' + child.id });
               }
             }
