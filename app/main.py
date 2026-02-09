@@ -26,7 +26,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(
     title="MiniRAG",
-    version="0.1.0",
+    version="0.1.1",
     description="Modular, provider-agnostic RAG platform",
     lifespan=lifespan,
 )
