@@ -7,4 +7,6 @@ header {
 	-Server
 }
 
+redir / https://landingpage-mini-rag.vercel.app/ permanent
+
 reverse_proxy web:8000
