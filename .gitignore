@@ -29,6 +29,8 @@ Thumbs.db
 
 # ── Secrets & env ─────────────────────────────────────────
 .env
+.env.*
+!.env.production.example
 .env*.local
 *.pem
 

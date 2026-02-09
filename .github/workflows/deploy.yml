@@ -1,0 +1,71 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "dashboard/**"
+      - "Dockerfile"
+      - "docker-compose*.yml"
+      - "Caddyfile"
+      - "pyproject.toml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set image tag
+        id: meta
+        run: |
+          REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "repo=$REPO" >> "$GITHUB_OUTPUT"
+          echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: web
+          push: true
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.repo }}/web:latest
+            ghcr.io/${{ steps.meta.outputs.repo }}/web:${{ steps.meta.outputs.tag }}
+
+      - name: Build and push worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: worker
+          push: true
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.repo }}/worker:latest
+            ghcr.io/${{ steps.meta.outputs.repo }}/worker:${{ steps.meta.outputs.tag }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to VPS via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /opt/minirag
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull web worker
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+            docker image prune -f

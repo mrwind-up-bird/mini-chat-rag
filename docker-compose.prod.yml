@@ -1,0 +1,102 @@
+services:
+  # ── Caddy reverse proxy (auto-HTTPS) ──────────────────────
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"  # HTTP/3
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      DOMAIN: ${DOMAIN:-:80}
+    depends_on:
+      web:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── PostgreSQL overrides ──────────────────────────────────
+  postgres:
+    ports: !override []
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-minirag}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-minirag}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── Qdrant overrides ─────────────────────────────────────
+  qdrant:
+    ports: !override []
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── Redis overrides ──────────────────────────────────────
+  redis:
+    ports: !override []
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── Web service overrides ────────────────────────────────
+  web:
+    ports: !override []
+    volumes: !override []
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── Worker overrides ─────────────────────────────────────
+  worker:
+    volumes: !override []
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy_data:
+  caddy_config:

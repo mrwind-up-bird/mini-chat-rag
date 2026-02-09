@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60
 
+    # ── CORS ─────────────────────────────────────────────
+    allowed_origins: str = "*"  # comma-separated, e.g. "https://minirag.example.com"
+
     # ── LLM ───────────────────────────────────────────────
     default_llm_model: str = "gpt-4o-mini"
     default_embedding_model: str = "text-embedding-3-small"
