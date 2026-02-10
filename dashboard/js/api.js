@@ -180,6 +180,15 @@ const API = {
   getUsage() {
     return this.get('/v1/stats/usage');
   },
+  getUsageByBot() {
+    return this.get('/v1/stats/usage/by-bot');
+  },
+  getUsageByModel() {
+    return this.get('/v1/stats/usage/by-model');
+  },
+  getCostEstimate(days = 30) {
+    return this.get(`/v1/stats/cost-estimate?days=${days}`);
+  },
 
   // ── System ────────────────────────────────────────────
   getSystemHealth() {

@@ -750,37 +750,126 @@
         <div x-show="page === 'usage'" x-data="usagePage()" x-init="load()">
           <h2 class="text-2xl font-bold mb-6">Usage & Analytics</h2>
 
+          <!-- Cost summary cards -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8" x-show="costEstimate">
+            <div class="stat-card p-5">
+              <div class="text-sm" style="color: rgba(255,255,255,0.5);">Total Cost</div>
+              <div class="text-2xl font-bold mt-1" x-text="formatUsd(costEstimate?.total_cost_usd)"></div>
+              <div class="text-xs mt-1" style="color: rgba(255,255,255,0.3);" x-text="'Last ' + (costEstimate?.active_days || 0) + ' active days'"></div>
+            </div>
+            <div class="stat-card p-5">
+              <div class="text-sm" style="color: rgba(255,255,255,0.5);">Daily Average</div>
+              <div class="text-2xl font-bold mt-1" x-text="formatUsd(costEstimate?.daily_avg_cost_usd)"></div>
+              <div class="text-xs mt-1" style="color: rgba(255,255,255,0.3);">Per active day</div>
+            </div>
+            <div class="stat-card p-5">
+              <div class="text-sm" style="color: rgba(255,255,255,0.5);">Projected Monthly</div>
+              <div class="text-2xl font-bold mt-1" style="color: #a78bfa;" x-text="formatUsd(costEstimate?.projected_monthly_usd)"></div>
+              <div class="text-xs mt-1" style="color: rgba(255,255,255,0.3);">Based on current pace</div>
+            </div>
+            <div class="stat-card p-5">
+              <div class="text-sm" style="color: rgba(255,255,255,0.5);">Total Requests</div>
+              <div class="text-2xl font-bold mt-1" x-text="totalRequests.toLocaleString()"></div>
+              <div class="text-xs mt-1" style="color: rgba(255,255,255,0.3);">LLM completions</div>
+            </div>
+          </div>
+
+          <!-- Charts -->
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <div class="glass-card-static p-5">
               <h3 class="font-semibold mb-3">Token Usage by Day</h3>
               <canvas x-ref="dailyChart" height="200"></canvas>
             </div>
             <div class="glass-card-static p-5">
-              <h3 class="font-semibold mb-3">Usage by Model</h3>
+              <h3 class="font-semibold mb-3">Cost by Model</h3>
               <canvas x-ref="modelChart" height="200"></canvas>
             </div>
           </div>
 
-          <!-- Raw data table -->
-          <div class="glass-table-wrap">
-            <table class="data-table">
-              <thead><tr>
-                <th>Date</th><th>Model</th><th>Requests</th><th>Prompt</th><th>Completion</th><th>Total</th>
-              </tr></thead>
-              <tbody>
-                <template x-for="row in usageData" :key="row.date + row.model">
-                  <tr>
-                    <td x-text="row.date"></td>
-                    <td x-text="row.model"></td>
-                    <td x-text="row.request_count"></td>
-                    <td x-text="row.prompt_tokens.toLocaleString()"></td>
-                    <td x-text="row.completion_tokens.toLocaleString()"></td>
-                    <td class="font-medium text-white" x-text="row.total_tokens.toLocaleString()"></td>
-                  </tr>
-                </template>
-              </tbody>
-            </table>
-            <div x-show="usageData.length === 0 && !loading" class="empty-state"><p>No usage data yet.</p></div>
+          <!-- Tabs for breakdown tables -->
+          <div class="flex gap-1 mb-4" style="border-bottom: 1px solid rgba(255,255,255,0.08);">
+            <template x-for="tab in tabs" :key="tab.id">
+              <button @click="activeTab = tab.id"
+                      :style="activeTab === tab.id
+                        ? 'color: #a78bfa; border-bottom: 2px solid #a78bfa; background: none; padding: 0.5rem 0.75rem; font-size: 0.8125rem; font-weight: 500; cursor: pointer; border-top: none; border-left: none; border-right: none;'
+                        : 'color: rgba(255,255,255,0.4); border-bottom: 2px solid transparent; background: none; padding: 0.5rem 0.75rem; font-size: 0.8125rem; font-weight: 500; cursor: pointer; border-top: none; border-left: none; border-right: none;'"
+                      x-text="tab.label"></button>
+            </template>
+          </div>
+
+          <!-- By Model tab -->
+          <div x-show="activeTab === 'model'">
+            <div class="glass-table-wrap">
+              <table class="data-table">
+                <thead><tr>
+                  <th>Model</th><th>Requests</th><th>Prompt</th><th>Completion</th><th>Total</th><th>Rate ($/1M)</th><th class="text-right">Cost</th>
+                </tr></thead>
+                <tbody>
+                  <template x-for="row in modelData" :key="row.model">
+                    <tr>
+                      <td class="font-medium text-white" x-text="row.model"></td>
+                      <td x-text="row.request_count.toLocaleString()"></td>
+                      <td x-text="row.prompt_tokens.toLocaleString()"></td>
+                      <td x-text="row.completion_tokens.toLocaleString()"></td>
+                      <td x-text="row.total_tokens.toLocaleString()"></td>
+                      <td class="text-xs" style="color: rgba(255,255,255,0.4);" x-text="'$' + row.prompt_cost_per_1m + ' / $' + row.completion_cost_per_1m"></td>
+                      <td class="text-right font-medium" style="color: #a78bfa;" x-text="formatUsd(row.cost_usd)"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+              <div x-show="modelData.length === 0 && !loading" class="empty-state"><p>No usage data yet.</p></div>
+            </div>
+          </div>
+
+          <!-- By Bot tab -->
+          <div x-show="activeTab === 'bot'">
+            <div class="glass-table-wrap">
+              <table class="data-table">
+                <thead><tr>
+                  <th>Bot</th><th>Model</th><th>Requests</th><th>Prompt</th><th>Completion</th><th>Total</th><th class="text-right">Cost</th>
+                </tr></thead>
+                <tbody>
+                  <template x-for="row in botData" :key="row.bot_profile_id + row.model">
+                    <tr>
+                      <td class="font-medium text-white" x-text="row.bot_name"></td>
+                      <td class="text-xs" style="color: rgba(255,255,255,0.5);" x-text="row.model"></td>
+                      <td x-text="row.request_count.toLocaleString()"></td>
+                      <td x-text="row.prompt_tokens.toLocaleString()"></td>
+                      <td x-text="row.completion_tokens.toLocaleString()"></td>
+                      <td x-text="row.total_tokens.toLocaleString()"></td>
+                      <td class="text-right font-medium" style="color: #a78bfa;" x-text="formatUsd(row.cost_usd)"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+              <div x-show="botData.length === 0 && !loading" class="empty-state"><p>No usage data yet.</p></div>
+            </div>
+          </div>
+
+          <!-- Daily tab -->
+          <div x-show="activeTab === 'daily'">
+            <div class="glass-table-wrap">
+              <table class="data-table">
+                <thead><tr>
+                  <th>Date</th><th>Model</th><th>Requests</th><th>Prompt</th><th>Completion</th><th>Total</th><th class="text-right">Est. Cost</th>
+                </tr></thead>
+                <tbody>
+                  <template x-for="row in usageData" :key="row.date + row.model">
+                    <tr>
+                      <td x-text="row.date"></td>
+                      <td x-text="row.model"></td>
+                      <td x-text="row.request_count.toLocaleString()"></td>
+                      <td x-text="row.prompt_tokens.toLocaleString()"></td>
+                      <td x-text="row.completion_tokens.toLocaleString()"></td>
+                      <td x-text="row.total_tokens.toLocaleString()"></td>
+                      <td class="text-right font-medium" style="color: #a78bfa;" x-text="formatUsd(calcRowCost(row))"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+              <div x-show="usageData.length === 0 && !loading" class="empty-state"><p>No usage data yet.</p></div>
+            </div>
           </div>
         </div>
 
@@ -1442,23 +1531,72 @@
     }
 
     function usagePage() {
+      // Client-side pricing map (mirrors backend MODEL_PRICING)
+      const MODEL_PRICING = {
+        'gpt-4o': [2.50, 10.00], 'gpt-4o-mini': [0.15, 0.60],
+        'gpt-4-turbo': [10.00, 30.00], 'gpt-4': [30.00, 60.00],
+        'gpt-3.5-turbo': [0.50, 1.50], 'o1': [15.00, 60.00],
+        'o1-mini': [3.00, 12.00], 'o3-mini': [1.10, 4.40],
+        'claude-opus-4-6': [15.00, 75.00],
+        'claude-sonnet-4-5-20250929': [3.00, 15.00],
+        'claude-haiku-4-5-20251001': [0.80, 4.00],
+        'gemini/gemini-2.0-flash': [0.10, 0.40],
+        'gemini/gemini-1.5-pro': [1.25, 5.00],
+        'gemini/gemini-1.5-flash': [0.075, 0.30],
+      };
+      const DEFAULT_PRICING = [1.00, 3.00];
+
       return {
         usageData: [],
+        modelData: [],
+        botData: [],
+        costEstimate: null,
         loading: false,
         dailyChartInstance: null,
         modelChartInstance: null,
+        activeTab: 'model',
+        tabs: [
+          { id: 'model', label: 'By Model' },
+          { id: 'bot', label: 'By Bot' },
+          { id: 'daily', label: 'Daily Breakdown' },
+        ],
+
+        get totalRequests() {
+          if (!this.costEstimate) return 0;
+          return this.costEstimate.by_model.reduce((s, m) => s + m.request_count, 0);
+        },
+
+        formatUsd(val) {
+          if (val == null) return '$0.00';
+          if (val < 0.01 && val > 0) return '<$0.01';
+          return '$' + val.toFixed(2);
+        },
+
+        calcRowCost(row) {
+          const [pRate, cRate] = MODEL_PRICING[row.model] || DEFAULT_PRICING;
+          return (row.prompt_tokens * pRate + row.completion_tokens * cRate) / 1_000_000;
+        },
 
         async load() {
           this.loading = true;
           try {
-            this.usageData = await API.getUsage();
+            const [usage, models, bots, estimate] = await Promise.all([
+              API.getUsage(),
+              API.getUsageByModel(),
+              API.getUsageByBot(),
+              API.getCostEstimate(),
+            ]);
+            this.usageData = usage;
+            this.modelData = models;
+            this.botData = bots;
+            this.costEstimate = estimate;
             this.$nextTick(() => this.renderCharts());
           } catch (e) { Alpine.store('toast').error(e.message); }
           this.loading = false;
         },
 
         renderCharts() {
-          // Daily chart
+          // Daily token chart
           const dates = [...new Set(this.usageData.map(r => r.date))].sort();
           const dailyTotals = dates.map(d =>
             this.usageData.filter(r => r.date === d).reduce((s, r) => s + r.total_tokens, 0)
@@ -1484,14 +1622,10 @@
             });
           }
 
-          // Model pie chart
-          const models = {};
-          this.usageData.forEach(r => {
-            models[r.model] = (models[r.model] || 0) + r.total_tokens;
-          });
-          const modelLabels = Object.keys(models);
-          const modelValues = Object.values(models);
+          // Cost by model doughnut
           const colors = ['#8b5cf6', '#06b6d4', '#f59e0b', '#f43f5e', '#10b981', '#818cf8'];
+          const modelLabels = this.modelData.map(m => m.model);
+          const modelCosts = this.modelData.map(m => m.cost_usd);
 
           if (this.modelChartInstance) this.modelChartInstance.destroy();
           const modelCtx = this.$refs.modelChart?.getContext('2d');
@@ -1501,13 +1635,22 @@
               data: {
                 labels: modelLabels,
                 datasets: [{
-                  data: modelValues,
+                  data: modelCosts,
                   backgroundColor: colors.slice(0, modelLabels.length),
                   borderColor: 'rgba(255, 255, 255, 0.05)',
                   borderWidth: 2,
                 }],
               },
-              options: { responsive: true },
+              options: {
+                responsive: true,
+                plugins: {
+                  tooltip: {
+                    callbacks: {
+                      label: (ctx) => `${ctx.label}: $${ctx.parsed.toFixed(4)}`,
+                    },
+                  },
+                },
+              },
             });
           }
         },
