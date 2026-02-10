@@ -1355,7 +1355,196 @@
       ]
     },
     {
-      "name": "6 — Cleanup",
+      "name": "6 — Stats & Usage",
+      "description": "Usage analytics, cost breakdown, and projections.",
+      "item": [
+        {
+          "name": "Overview Stats",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response has summary fields', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('bot_profiles');",
+                  "    pm.expect(json).to.have.property('sources');",
+                  "    pm.expect(json).to.have.property('chats');",
+                  "    pm.expect(json).to.have.property('total_tokens');",
+                  "    pm.expect(json).to.have.property('total_prompt_tokens');",
+                  "    pm.expect(json).to.have.property('total_completion_tokens');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/v1/stats/overview", "host": ["{{base_url}}"], "path": ["v1", "stats", "overview"] },
+            "description": "Summary counts: bot profiles, sources, chats, and total tokens."
+          }
+        },
+        {
+          "name": "Daily Usage",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Returns an array', function () {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/v1/stats/usage", "host": ["{{base_url}}"], "path": ["v1", "stats", "usage"] },
+            "description": "Token usage aggregated by day and model."
+          }
+        },
+        {
+          "name": "Usage by Model",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Returns an array', function () {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});",
+                  "pm.test('Each item has cost fields', function () {",
+                  "    pm.response.json().forEach(function(row) {",
+                  "        pm.expect(row).to.have.property('model');",
+                  "        pm.expect(row).to.have.property('cost_usd');",
+                  "        pm.expect(row).to.have.property('prompt_cost_per_1m');",
+                  "        pm.expect(row).to.have.property('completion_cost_per_1m');",
+                  "        pm.expect(row.cost_usd).to.be.a('number');",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/v1/stats/usage/by-model", "host": ["{{base_url}}"], "path": ["v1", "stats", "usage", "by-model"] },
+            "description": "Usage aggregated by model with cost breakdown and per-1M rates."
+          }
+        },
+        {
+          "name": "Usage by Bot",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Returns an array', function () {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});",
+                  "pm.test('Each item has bot and cost fields', function () {",
+                  "    pm.response.json().forEach(function(row) {",
+                  "        pm.expect(row).to.have.property('bot_profile_id');",
+                  "        pm.expect(row).to.have.property('bot_name');",
+                  "        pm.expect(row).to.have.property('model');",
+                  "        pm.expect(row).to.have.property('cost_usd');",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/v1/stats/usage/by-bot", "host": ["{{base_url}}"], "path": ["v1", "stats", "usage", "by-bot"] },
+            "description": "Usage aggregated by bot profile with cost."
+          }
+        },
+        {
+          "name": "Cost Estimate (30 days)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response has cost summary fields', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('total_cost_usd');",
+                  "    pm.expect(json).to.have.property('daily_avg_cost_usd');",
+                  "    pm.expect(json).to.have.property('projected_monthly_usd');",
+                  "    pm.expect(json).to.have.property('active_days');",
+                  "    pm.expect(json).to.have.property('by_model');",
+                  "    pm.expect(json).to.have.property('by_bot');",
+                  "    pm.expect(json.by_model).to.be.an('array');",
+                  "    pm.expect(json.by_bot).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/v1/stats/cost-estimate", "host": ["{{base_url}}"], "path": ["v1", "stats", "cost-estimate"] },
+            "description": "Cost summary with total, daily average, and projected monthly spend over the last 30 days."
+          }
+        },
+        {
+          "name": "Cost Estimate (7 days)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response has valid structure', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.total_cost_usd).to.be.a('number');",
+                  "    pm.expect(json.projected_monthly_usd).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/v1/stats/cost-estimate?days=7", "host": ["{{base_url}}"], "path": ["v1", "stats", "cost-estimate"], "query": [{ "key": "days", "value": "7" }] },
+            "description": "Cost estimate with a custom 7-day lookback window."
+          }
+        }
+      ]
+    },
+    {
+      "name": "7 — Cleanup",
       "description": "Cleanup: soft-delete resources created during the test run.",
       "item": [
         {

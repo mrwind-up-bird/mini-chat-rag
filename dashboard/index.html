@@ -748,7 +748,16 @@
 
         <!-- ── Usage ──────────────────────────────────────── -->
         <div x-show="page === 'usage'" x-data="usagePage()" x-init="load()">
-          <h2 class="text-2xl font-bold mb-6">Usage & Analytics</h2>
+          <div class="flex items-center justify-between mb-6">
+            <h2 class="text-2xl font-bold">Usage & Analytics</h2>
+            <select x-model="selectedDays" @change="load()"
+                    style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.4rem 0.75rem; border-radius: 0.5rem; font-size: 0.8125rem; cursor: pointer; outline: none;">
+              <option value="7">Last 7 days</option>
+              <option value="30" selected>Last 30 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="">All time</option>
+            </select>
+          </div>
 
           <!-- Cost summary cards -->
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8" x-show="costEstimate">
@@ -1554,6 +1563,7 @@
         loading: false,
         dailyChartInstance: null,
         modelChartInstance: null,
+        selectedDays: '30',
         activeTab: 'model',
         tabs: [
           { id: 'model', label: 'By Model' },
@@ -1580,11 +1590,12 @@
         async load() {
           this.loading = true;
           try {
+            const d = this.selectedDays ? parseInt(this.selectedDays) : null;
             const [usage, models, bots, estimate] = await Promise.all([
-              API.getUsage(),
-              API.getUsageByModel(),
-              API.getUsageByBot(),
-              API.getCostEstimate(),
+              API.getUsage(d),
+              API.getUsageByModel(d),
+              API.getUsageByBot(d),
+              API.getCostEstimate(d || 30),
             ]);
             this.usageData = usage;
             this.modelData = models;

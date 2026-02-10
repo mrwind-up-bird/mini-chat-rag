@@ -177,14 +177,14 @@ const API = {
   getOverview() {
     return this.get('/v1/stats/overview');
   },
-  getUsage() {
-    return this.get('/v1/stats/usage');
+  getUsage(days = null) {
+    return this.get('/v1/stats/usage' + (days ? `?days=${days}` : ''));
   },
-  getUsageByBot() {
-    return this.get('/v1/stats/usage/by-bot');
+  getUsageByBot(days = null) {
+    return this.get('/v1/stats/usage/by-bot' + (days ? `?days=${days}` : ''));
   },
-  getUsageByModel() {
-    return this.get('/v1/stats/usage/by-model');
+  getUsageByModel(days = null) {
+    return this.get('/v1/stats/usage/by-model' + (days ? `?days=${days}` : ''));
   },
   getCostEstimate(days = 30) {
     return this.get(`/v1/stats/cost-estimate?days=${days}`);

@@ -241,6 +241,17 @@ async def test_cost_estimate_custom_days(client: AsyncClient, session: AsyncSess
 
 
 @pytest.mark.asyncio
+async def test_days_filter_on_all_endpoints(client: AsyncClient, session: AsyncSession):
+    """All usage endpoints accept ?days= and return filtered data."""
+    headers, _, _ = await _bootstrap_with_usage(client, session, slug="stats-days-filter")
+
+    for path in ["/v1/stats/usage", "/v1/stats/usage/by-model", "/v1/stats/usage/by-bot"]:
+        resp = await client.get(f"{path}?days=7", headers=headers)
+        assert resp.status_code == 200, f"{path}?days=7 failed"
+        assert len(resp.json()) >= 1, f"{path}?days=7 should include recent data"
+
+
+@pytest.mark.asyncio
 async def test_new_stats_require_auth(client: AsyncClient):
     """New stats endpoints require authentication."""
     for path in ["/v1/stats/usage/by-model", "/v1/stats/usage/by-bot", "/v1/stats/cost-estimate"]:

@@ -5,7 +5,7 @@ from datetime import timedelta
 
 from fastapi import APIRouter
 from pydantic import BaseModel
-from sqlalchemy import func, cast, Date
+from sqlalchemy import func
 from sqlmodel import select
 
 from app.api.deps import Auth, Session
@@ -145,20 +145,28 @@ async def get_overview(auth: Auth, session: Session) -> OverviewStats:
 
 
 @router.get("/usage", response_model=list[DailyUsage])
-async def get_usage(auth: Auth, session: Session) -> list[DailyUsage]:
+async def get_usage(
+    auth: Auth,
+    session: Session,
+    days: int | None = None,
+) -> list[DailyUsage]:
     """Token usage aggregated by day and model."""
+    filters = [UsageEvent.tenant_id == auth.tenant_id]
+    if days is not None:
+        filters.append(UsageEvent.created_at >= utcnow() - timedelta(days=days))
+    date_col = func.date(UsageEvent.created_at)
     stmt = (
         select(
-            cast(UsageEvent.created_at, Date).label("date"),
+            date_col.label("date"),
             UsageEvent.model,
             func.sum(UsageEvent.prompt_tokens).label("prompt_tokens"),
             func.sum(UsageEvent.completion_tokens).label("completion_tokens"),
             func.sum(UsageEvent.total_tokens).label("total_tokens"),
             func.count().label("request_count"),
         )
-        .where(UsageEvent.tenant_id == auth.tenant_id)
-        .group_by(cast(UsageEvent.created_at, Date), UsageEvent.model)
-        .order_by(cast(UsageEvent.created_at, Date).desc())
+        .where(*filters)
+        .group_by(date_col, UsageEvent.model)
+        .order_by(date_col.desc())
     )
     result = await session.execute(stmt)
 
@@ -176,8 +184,15 @@ async def get_usage(auth: Auth, session: Session) -> list[DailyUsage]:
 
 
 @router.get("/usage/by-bot", response_model=list[BotUsage])
-async def get_usage_by_bot(auth: Auth, session: Session) -> list[BotUsage]:
+async def get_usage_by_bot(
+    auth: Auth,
+    session: Session,
+    days: int | None = None,
+) -> list[BotUsage]:
     """Token usage aggregated by bot profile."""
+    filters = [UsageEvent.tenant_id == auth.tenant_id]
+    if days is not None:
+        filters.append(UsageEvent.created_at >= utcnow() - timedelta(days=days))
     stmt = (
         select(
             UsageEvent.bot_profile_id,
@@ -189,7 +204,7 @@ async def get_usage_by_bot(auth: Auth, session: Session) -> list[BotUsage]:
             func.count().label("request_count"),
         )
         .join(BotProfile, UsageEvent.bot_profile_id == BotProfile.id)
-        .where(UsageEvent.tenant_id == auth.tenant_id)
+        .where(*filters)
         .group_by(UsageEvent.bot_profile_id, BotProfile.name, UsageEvent.model)
         .order_by(func.sum(UsageEvent.total_tokens).desc())
     )
@@ -211,8 +226,15 @@ async def get_usage_by_bot(auth: Auth, session: Session) -> list[BotUsage]:
 
 
 @router.get("/usage/by-model", response_model=list[ModelUsage])
-async def get_usage_by_model(auth: Auth, session: Session) -> list[ModelUsage]:
+async def get_usage_by_model(
+    auth: Auth,
+    session: Session,
+    days: int | None = None,
+) -> list[ModelUsage]:
     """Token usage aggregated by model with cost breakdown."""
+    filters = [UsageEvent.tenant_id == auth.tenant_id]
+    if days is not None:
+        filters.append(UsageEvent.created_at >= utcnow() - timedelta(days=days))
     stmt = (
         select(
             UsageEvent.model,
@@ -221,7 +243,7 @@ async def get_usage_by_model(auth: Auth, session: Session) -> list[ModelUsage]:
             func.sum(UsageEvent.total_tokens).label("total_tokens"),
             func.count().label("request_count"),
         )
-        .where(UsageEvent.tenant_id == auth.tenant_id)
+        .where(*filters)
         .group_by(UsageEvent.model)
         .order_by(func.sum(UsageEvent.total_tokens).desc())
     )
@@ -291,7 +313,7 @@ async def get_cost_estimate(
 
     # Count distinct active days in the window
     days_stmt = (
-        select(func.count(func.distinct(cast(UsageEvent.created_at, Date))))
+        select(func.count(func.distinct(func.date(UsageEvent.created_at))))
         .where(UsageEvent.tenant_id == tid, UsageEvent.created_at >= cutoff)
     )
     active_days = (await session.execute(days_stmt)).scalar_one() or 0
