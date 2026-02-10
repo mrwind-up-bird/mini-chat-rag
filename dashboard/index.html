@@ -267,15 +267,47 @@
 
           <!-- Embed Snippet Modal -->
           <div x-show="embedBot" class="modal-backdrop" @click.self="embedBot = null">
-            <div class="modal-content p-6" style="max-width: 36rem;">
+            <div class="modal-content p-6" style="max-width: 40rem;">
               <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-bold">Embed Widget</h3>
                 <button @click="embedBot = null" class="modal-close">&times;</button>
               </div>
-              <p class="text-sm mb-3" style="color: rgba(255,255,255,0.55);">
-                Paste this snippet into any HTML page to embed the <strong x-text="embedBot?.name"></strong> chat widget.
-              </p>
-              <pre class="code-block overflow-x-auto text-xs mb-3" style="white-space: pre-wrap; word-break: break-all;" x-text="getEmbedSnippet()"></pre>
+
+              <!-- Tabs -->
+              <div class="flex gap-1 mb-4" style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0;">
+                <template x-for="tab in embedTabs" :key="tab.id">
+                  <button @click="embedTab = tab.id"
+                          :style="embedTab === tab.id
+                            ? 'color: #a78bfa; border-bottom: 2px solid #a78bfa; background: none; padding: 0.5rem 0.75rem; font-size: 0.8125rem; font-weight: 500; cursor: pointer; border-top: none; border-left: none; border-right: none;'
+                            : 'color: rgba(255,255,255,0.4); border-bottom: 2px solid transparent; background: none; padding: 0.5rem 0.75rem; font-size: 0.8125rem; font-weight: 500; cursor: pointer; border-top: none; border-left: none; border-right: none;'"
+                          x-text="tab.label"></button>
+                </template>
+              </div>
+
+              <!-- Script Tag tab -->
+              <div x-show="embedTab === 'script'">
+                <p class="text-sm mb-3" style="color: rgba(255,255,255,0.55);">
+                  Add a floating chat bubble to any page with a single script tag.
+                </p>
+                <pre class="code-block overflow-x-auto text-xs mb-3" style="white-space: pre-wrap; word-break: break-all;" x-text="getEmbedSnippet('script')"></pre>
+              </div>
+
+              <!-- Custom Element tab -->
+              <div x-show="embedTab === 'element'">
+                <p class="text-sm mb-3" style="color: rgba(255,255,255,0.55);">
+                  Use the custom element for inline placement — position the widget anywhere in your layout.
+                </p>
+                <pre class="code-block overflow-x-auto text-xs mb-3" style="white-space: pre-wrap; word-break: break-all;" x-text="getEmbedSnippet('element')"></pre>
+              </div>
+
+              <!-- Styling tab -->
+              <div x-show="embedTab === 'styling'">
+                <p class="text-sm mb-3" style="color: rgba(255,255,255,0.55);">
+                  Override CSS custom properties to match your brand.
+                </p>
+                <pre class="code-block overflow-x-auto text-xs mb-3" style="white-space: pre-wrap; word-break: break-all;" x-text="getEmbedSnippet('styling')"></pre>
+              </div>
+
               <p class="text-xs mb-4" style="color: rgba(255,255,255,0.35);">
                 Replace <code>YOUR_API_TOKEN</code> with an active API token. You can create one on the
                 <button @click="embedBot = null; page = 'tokens'" class="underline" style="color: #a78bfa; background: none; border: none; cursor: pointer; padding: 0; font-size: inherit;">API Tokens</button> page.
@@ -869,6 +901,12 @@
         tryInput: '',
         trySending: false,
         embedBot: null,
+        embedTab: 'script',
+        embedTabs: [
+          { id: 'script', label: 'Script Tag' },
+          { id: 'element', label: 'Custom Element' },
+          { id: 'styling', label: 'Styling' },
+        ],
 
         async load() {
           this.loading = true;
@@ -953,17 +991,26 @@
 
         showEmbed(bot) {
           this.embedBot = bot;
+          this.embedTab = 'script';
         },
 
-        getEmbedSnippet() {
+        getEmbedSnippet(tab) {
           if (!this.embedBot) return '';
           const origin = window.location.origin;
-          return `<script src="${origin}/dashboard/widget/minirag-widget.js"\n        data-bot-id="${this.embedBot.id}"\n        data-api-url="${origin}"\n        data-api-token="YOUR_API_TOKEN"\n        data-title="${this.embedBot.name}">\n<\/script>`;
+          const id = this.embedBot.id;
+          const name = this.embedBot.name;
+          if (tab === 'element') {
+            return `<!-- Load the widget script -->\n<script src="${origin}/dashboard/widget/minirag-widget.js"><\/script>\n\n<!-- Place wherever you want the chat to appear -->\n<minirag-widget\n  bot-id="${id}"\n  api-url="${origin}"\n  api-token="YOUR_API_TOKEN"\n  title="${name}">\n</minirag-widget>`;
+          }
+          if (tab === 'styling') {
+            return `<style>\n  minirag-widget {\n    --primary: #4f46e5;\n    --primary-hover: #4338ca;\n    --bg: #ffffff;\n    --bg-secondary: #f3f4f6;\n    --text: #111827;\n    --text-secondary: #6b7280;\n    --border: #e5e7eb;\n    --radius: 12px;\n  }\n</style>`;
+          }
+          return `<script src="${origin}/dashboard/widget/minirag-widget.js"\n        data-bot-id="${id}"\n        data-api-url="${origin}"\n        data-api-token="YOUR_API_TOKEN"\n        data-title="${name}">\n<\/script>`;
         },
 
         async copySnippet() {
           try {
-            await navigator.clipboard.writeText(this.getEmbedSnippet());
+            await navigator.clipboard.writeText(this.getEmbedSnippet(this.embedTab));
             Alpine.store('toast').success('Snippet copied to clipboard');
           } catch {
             Alpine.store('toast').error('Failed to copy snippet');

@@ -5,9 +5,9 @@ MiniRAG includes an embeddable chat widget that you can add to any website with 
 ## Quick Start
 
 ```html
-<script src="https://your-minirag-host/dashboard/widget/minirag-widget.js"
+<script src="https://mini-rag.de/dashboard/widget/minirag-widget.js"
         data-bot-id="YOUR_BOT_PROFILE_ID"
-        data-api-url="https://your-minirag-host"
+        data-api-url="https://mini-rag.de"
         data-api-token="YOUR_API_TOKEN"
         data-title="Support Bot">
 </script>
@@ -32,12 +32,12 @@ You can also use the widget as a custom HTML element for more control:
 
 ```html
 <!-- Load the script (without auto-insert attributes) -->
-<script src="https://your-minirag-host/dashboard/widget/minirag-widget.js"></script>
+<script src="https://mini-rag.de/dashboard/widget/minirag-widget.js"></script>
 
 <!-- Place the widget where you want -->
 <minirag-widget
   bot-id="YOUR_BOT_PROFILE_ID"
-  api-url="https://your-minirag-host"
+  api-url="https://mini-rag.de"
   api-token="YOUR_API_TOKEN"
   title="Help Assistant">
 </minirag-widget>
@@ -88,7 +88,7 @@ minirag-widget {
 
 ## Dashboard Integration
 
-In the MiniRAG dashboard, each bot profile card has a "Try It" button that opens an inline chat — this uses the same chat API endpoint as the widget.
+In the MiniRAG dashboard, each bot profile card has an **Embed** button that opens a modal with ready-to-copy snippets for all three integration methods (Script Tag, Custom Element, and Styling). Click **Copy Snippet** to copy the active tab's code — the bot ID and API URL are pre-filled automatically.
 
 ## Troubleshooting
 
