@@ -202,6 +202,7 @@
                 <div class="flex gap-2">
                   <button @click="editBot(bot)" class="btn-secondary btn-sm">Edit</button>
                   <button @click="tryBot(bot)" class="btn-success btn-sm">Try It</button>
+                  <button @click="showEmbed(bot)" class="btn-secondary btn-sm">Embed</button>
                   <button @click="confirmDeleteBot(bot)" class="btn-danger btn-sm">Delete</button>
                 </div>
               </div>
@@ -261,6 +262,27 @@
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+
+          <!-- Embed Snippet Modal -->
+          <div x-show="embedBot" class="modal-backdrop" @click.self="embedBot = null">
+            <div class="modal-content p-6" style="max-width: 36rem;">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-bold">Embed Widget</h3>
+                <button @click="embedBot = null" class="modal-close">&times;</button>
+              </div>
+              <p class="text-sm mb-3" style="color: rgba(255,255,255,0.55);">
+                Paste this snippet into any HTML page to embed the <strong x-text="embedBot?.name"></strong> chat widget.
+              </p>
+              <pre class="code-block overflow-x-auto text-xs mb-3" style="white-space: pre-wrap; word-break: break-all;" x-text="getEmbedSnippet()"></pre>
+              <p class="text-xs mb-4" style="color: rgba(255,255,255,0.35);">
+                Replace <code>YOUR_API_TOKEN</code> with an active API token. You can create one on the
+                <button @click="embedBot = null; page = 'tokens'" class="underline" style="color: #a78bfa; background: none; border: none; cursor: pointer; padding: 0; font-size: inherit;">API Tokens</button> page.
+              </p>
+              <div class="flex justify-end">
+                <button @click="copySnippet()" class="btn-primary btn-sm">Copy Snippet</button>
+              </div>
             </div>
           </div>
 
@@ -846,6 +868,7 @@
         tryMessages: [],
         tryInput: '',
         trySending: false,
+        embedBot: null,
 
         async load() {
           this.loading = true;
@@ -926,6 +949,25 @@
             const el = this.$refs.tryChatMessages;
             if (el) el.scrollTop = el.scrollHeight;
           });
+        },
+
+        showEmbed(bot) {
+          this.embedBot = bot;
+        },
+
+        getEmbedSnippet() {
+          if (!this.embedBot) return '';
+          const origin = window.location.origin;
+          return `<script src="${origin}/dashboard/widget/minirag-widget.js"\n        data-bot-id="${this.embedBot.id}"\n        data-api-url="${origin}"\n        data-api-token="YOUR_API_TOKEN"\n        data-title="${this.embedBot.name}">\n<\/script>`;
+        },
+
+        async copySnippet() {
+          try {
+            await navigator.clipboard.writeText(this.getEmbedSnippet());
+            Alpine.store('toast').success('Snippet copied to clipboard');
+          } catch {
+            Alpine.store('toast').error('Failed to copy snippet');
+          }
         },
       };
     }
