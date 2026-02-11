@@ -1330,9 +1330,9 @@
           this.tryMessages.push({ role: 'user', content: msg });
           this.trySending = true;
 
-          // Create a placeholder assistant message for streaming
-          const assistantMsg = { role: 'assistant', content: '', id: null, feedback: null, streaming: true };
-          this.tryMessages.push(assistantMsg);
+          // Push placeholder, then get reference through Alpine's reactive proxy
+          this.tryMessages.push({ role: 'assistant', content: '', id: null, feedback: null, streaming: true });
+          const msgIdx = this.tryMessages.length - 1;
 
           const scrollToBottom = () => {
             this.$nextTick(() => {
@@ -1344,31 +1344,31 @@
           try {
             await API.sendMessageStream(this.tryingBot.id, msg, this.tryChatId, {
               onDelta: (content) => {
-                assistantMsg.content += content;
+                this.tryMessages[msgIdx].content += content;
                 scrollToBottom();
               },
               onSources: (sources) => {
-                assistantMsg.sources = sources;
+                this.tryMessages[msgIdx].sources = sources;
               },
               onDone: (data) => {
                 this.tryChatId = data.chat_id;
-                assistantMsg.id = data.message_id;
-                assistantMsg.streaming = false;
+                this.tryMessages[msgIdx].id = data.message_id;
+                this.tryMessages[msgIdx].streaming = false;
                 this.trySending = false;
                 scrollToBottom();
               },
               onError: (detail) => {
-                if (!assistantMsg.content) {
-                  assistantMsg.content = `Error: ${detail}`;
+                if (!this.tryMessages[msgIdx].content) {
+                  this.tryMessages[msgIdx].content = `Error: ${detail}`;
                 }
-                assistantMsg.streaming = false;
+                this.tryMessages[msgIdx].streaming = false;
                 this.trySending = false;
                 scrollToBottom();
               },
             });
           } catch (e) {
-            assistantMsg.content = `Error: ${e.message}`;
-            assistantMsg.streaming = false;
+            this.tryMessages[msgIdx].content = `Error: ${e.message}`;
+            this.tryMessages[msgIdx].streaming = false;
             this.trySending = false;
             scrollToBottom();
           }
