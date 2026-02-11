@@ -2,7 +2,7 @@
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from cryptography.fernet import Fernet
 from jose import jwt
@@ -65,7 +65,7 @@ def decrypt_value(ciphertext: str) -> str:
 def create_jwt(
     subject: str, tenant_id: str, role: str = "member", expires_delta: timedelta | None = None
 ) -> str:
-    expire = datetime.now(timezone.utc) + (
+    expire = datetime.now(UTC) + (
         expires_delta or timedelta(minutes=settings.jwt_expire_minutes)
     )
     payload = {

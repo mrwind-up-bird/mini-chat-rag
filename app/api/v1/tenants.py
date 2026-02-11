@@ -2,13 +2,12 @@
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.api.deps import Auth, Session
 from app.core.security import generate_api_token, hash_api_token, hash_password
 from app.models.api_token import ApiToken
-from app.models.tenant import Tenant, TenantCreate, TenantRead
+from app.models.tenant import Tenant, TenantRead
 from app.models.user import User, UserRole
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])

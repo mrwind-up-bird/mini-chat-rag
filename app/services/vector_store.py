@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
-
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import (
     Distance,

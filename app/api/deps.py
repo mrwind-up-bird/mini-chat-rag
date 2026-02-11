@@ -1,7 +1,6 @@
 """FastAPI dependencies for authentication and tenant resolution."""
 
 import uuid
-from app.models.base import utcnow
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -13,6 +12,7 @@ from sqlmodel import select
 from app.core.database import get_session
 from app.core.security import decode_jwt, hash_api_token
 from app.models.api_token import ApiToken
+from app.models.base import utcnow
 from app.models.user import User
 
 bearer_scheme = HTTPBearer()

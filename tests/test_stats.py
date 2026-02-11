@@ -6,7 +6,6 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.bot_profile import BotProfile
 from app.models.chat import Chat
 from app.models.message import Message, MessageRole
 from app.models.usage_event import UsageEvent

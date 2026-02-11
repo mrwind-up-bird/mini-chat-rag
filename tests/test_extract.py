@@ -11,12 +11,12 @@ def test_extract_txt():
 
 
 def test_extract_md():
-    text = extract_text("notes.md", "# Heading\n\nParagraph".encode())
+    text = extract_text("notes.md", b"# Heading\n\nParagraph")
     assert text == "# Heading\n\nParagraph"
 
 
 def test_extract_csv():
-    csv_bytes = "name,age\nAlice,30\nBob,25".encode()
+    csv_bytes = b"name,age\nAlice,30\nBob,25"
     text = extract_text("data.csv", csv_bytes)
     assert "Alice" in text
     assert "Bob" in text
@@ -24,18 +24,17 @@ def test_extract_csv():
 
 def test_extract_pdf():
     """Create a minimal valid PDF and extract text from it."""
-    from pypdf import PdfWriter
     from io import BytesIO
+
+    from pypdf import PdfWriter
 
     writer = PdfWriter()
     page = writer.add_blank_page(width=72, height=72)
 
     # Add text annotation via reportlab-free approach
     from pypdf.generic import (
-        ArrayObject,
         DictionaryObject,
         NameObject,
-        TextStringObject,
     )
 
     # Build a minimal content stream with text
@@ -56,7 +55,7 @@ def test_extract_pdf():
     font_resources[NameObject("/F1")] = font_dict
     resources[NameObject("/Font")] = font_resources
 
-    from pypdf.generic import create_string_object, DecodedStreamObject
+    from pypdf.generic import DecodedStreamObject
 
     stream = DecodedStreamObject()
     stream.set_data(content)
@@ -74,8 +73,9 @@ def test_extract_pdf():
 
 def test_extract_docx():
     """Create a minimal .docx and extract text from it."""
-    from docx import Document
     from io import BytesIO
+
+    from docx import Document
 
     doc = Document()
     doc.add_paragraph("Hello DOCX")

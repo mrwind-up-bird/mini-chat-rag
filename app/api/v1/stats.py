@@ -5,7 +5,7 @@ from datetime import timedelta
 
 from fastapi import APIRouter
 from pydantic import BaseModel
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlmodel import select
 
 from app.api.deps import Auth, Session
@@ -14,6 +14,7 @@ from app.core.pricing import MODEL_PRICING, calc_cost, get_pricing
 from app.models.base import utcnow
 from app.models.bot_profile import BotProfile
 from app.models.chat import Chat
+from app.models.message import Message, MessageRole
 from app.models.source import Source
 from app.models.usage_event import UsageEvent
 
@@ -386,3 +387,181 @@ async def get_cost_estimate(
     )
     cache.put(cache_key, result)
     return result
+
+
+# ── Feedback analytics schemas ────────────────────────────────
+
+class BotFeedbackStats(BaseModel):
+    bot_profile_id: uuid.UUID
+    bot_name: str
+    positive_count: int
+    negative_count: int
+    total_messages: int
+    feedback_rate: float
+
+
+class FeedbackStats(BaseModel):
+    total_messages: int
+    total_with_feedback: int
+    positive_count: int
+    negative_count: int
+    feedback_rate: float
+    by_bot: list[BotFeedbackStats]
+
+
+class FeedbackTrendPoint(BaseModel):
+    date: str
+    positive_count: int
+    negative_count: int
+    total_messages: int
+
+
+# ── Feedback analytics routes ─────────────────────────────────
+
+@router.get("/feedback", response_model=FeedbackStats)
+async def get_feedback_stats(
+    auth: Auth,
+    session: Session,
+    bot_profile_id: uuid.UUID | None = None,
+    days: int = 30,
+) -> FeedbackStats:
+    """Feedback overview for assistant messages."""
+    tid = auth.tenant_id
+    cache_key = ("stats", "feedback", tid, bot_profile_id, days)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    cutoff = utcnow() - timedelta(days=days)
+
+    # Base filters: assistant messages within the time window
+    filters = [
+        Message.role == MessageRole.ASSISTANT,
+        Message.tenant_id == tid,
+        Message.created_at >= cutoff,
+    ]
+    if bot_profile_id:
+        filters.append(Chat.bot_profile_id == bot_profile_id)
+
+    # Overall counts
+    total_stmt = (
+        select(func.count()).select_from(Message)
+        .join(Chat, Message.chat_id == Chat.id)
+        .where(*filters)
+    )
+    total_messages = (await session.execute(total_stmt)).scalar_one()
+
+    pos_stmt = (
+        select(func.count()).select_from(Message)
+        .join(Chat, Message.chat_id == Chat.id)
+        .where(*filters, Message.feedback == "positive")
+    )
+    positive_count = (await session.execute(pos_stmt)).scalar_one()
+
+    neg_stmt = (
+        select(func.count()).select_from(Message)
+        .join(Chat, Message.chat_id == Chat.id)
+        .where(*filters, Message.feedback == "negative")
+    )
+    negative_count = (await session.execute(neg_stmt)).scalar_one()
+
+    total_with_feedback = positive_count + negative_count
+    feedback_rate = (total_with_feedback / total_messages * 100) if total_messages > 0 else 0.0
+
+    # Per-bot breakdown
+    bot_stmt = (
+        select(
+            Chat.bot_profile_id,
+            BotProfile.name.label("bot_name"),
+            func.count().label("total_messages"),
+            func.sum(case((Message.feedback == "positive", 1), else_=0)).label("positive_count"),
+            func.sum(case((Message.feedback == "negative", 1), else_=0)).label("negative_count"),
+        )
+        .select_from(Message)
+        .join(Chat, Message.chat_id == Chat.id)
+        .join(BotProfile, Chat.bot_profile_id == BotProfile.id)
+        .where(*filters)
+        .group_by(Chat.bot_profile_id, BotProfile.name)
+    )
+    bot_rows = (await session.execute(bot_stmt)).all()
+
+    by_bot = [
+        BotFeedbackStats(
+            bot_profile_id=row.bot_profile_id,
+            bot_name=row.bot_name,
+            positive_count=row.positive_count,
+            negative_count=row.negative_count,
+            total_messages=row.total_messages,
+            feedback_rate=round(
+                (row.positive_count + row.negative_count) / row.total_messages * 100
+                if row.total_messages > 0 else 0.0,
+                2,
+            ),
+        )
+        for row in bot_rows
+    ]
+
+    result = FeedbackStats(
+        total_messages=total_messages,
+        total_with_feedback=total_with_feedback,
+        positive_count=positive_count,
+        negative_count=negative_count,
+        feedback_rate=round(feedback_rate, 2),
+        by_bot=by_bot,
+    )
+    cache.put(cache_key, result)
+    return result
+
+
+@router.get("/feedback/trend", response_model=list[FeedbackTrendPoint])
+async def get_feedback_trend(
+    auth: Auth,
+    session: Session,
+    bot_profile_id: uuid.UUID | None = None,
+    days: int = 30,
+) -> list[FeedbackTrendPoint]:
+    """Daily feedback trend for assistant messages."""
+    tid = auth.tenant_id
+    cache_key = ("stats", "feedback-trend", tid, bot_profile_id, days)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    cutoff = utcnow() - timedelta(days=days)
+
+    filters = [
+        Message.role == MessageRole.ASSISTANT,
+        Message.tenant_id == tid,
+        Message.created_at >= cutoff,
+    ]
+    if bot_profile_id:
+        filters.append(Chat.bot_profile_id == bot_profile_id)
+
+    date_col = func.date(Message.created_at)
+
+    stmt = (
+        select(
+            date_col.label("date"),
+            func.count().label("total_messages"),
+            func.sum(case((Message.feedback == "positive", 1), else_=0)).label("positive_count"),
+            func.sum(case((Message.feedback == "negative", 1), else_=0)).label("negative_count"),
+        )
+        .select_from(Message)
+        .join(Chat, Message.chat_id == Chat.id)
+        .where(*filters)
+        .group_by(date_col)
+        .order_by(date_col.asc())
+    )
+    rows = (await session.execute(stmt)).all()
+
+    data = [
+        FeedbackTrendPoint(
+            date=str(row.date),
+            positive_count=row.positive_count,
+            negative_count=row.negative_count,
+            total_messages=row.total_messages,
+        )
+        for row in rows
+    ]
+    cache.put(cache_key, data)
+    return data

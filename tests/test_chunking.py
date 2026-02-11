@@ -1,6 +1,6 @@
 """Unit tests for the chunking service."""
 
-from app.services.chunking import TextChunk, chunk_text, normalize_text
+from app.services.chunking import chunk_text, normalize_text
 
 
 def test_normalize_collapses_whitespace():

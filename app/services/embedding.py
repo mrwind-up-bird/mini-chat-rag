@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from litellm import aembedding
 
-from app.core.config import get_settings
-
 # Default embedding model — small, fast, cheap
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 DEFAULT_EMBEDDING_DIMENSIONS = 1536

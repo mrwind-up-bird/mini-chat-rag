@@ -6,10 +6,18 @@ from app.models.chat import Chat, ChatRead
 from app.models.chunk import Chunk, ChunkRead
 from app.models.document import Document, DocumentRead
 from app.models.message import Message, MessageRead, MessageRole
-from app.models.source import Source, SourceCreate, SourceRead, SourceStatus, SourceType, SourceUpdate
+from app.models.source import (
+    Source,
+    SourceCreate,
+    SourceRead,
+    SourceStatus,
+    SourceType,
+    SourceUpdate,
+)
 from app.models.tenant import Tenant, TenantCreate, TenantRead
 from app.models.usage_event import UsageEvent, UsageEventRead
 from app.models.user import User, UserCreate, UserRead, UserRole
+from app.models.webhook import Webhook, WebhookCreate, WebhookCreated, WebhookEvent, WebhookRead
 
 __all__ = [
     "ApiToken",
@@ -44,4 +52,9 @@ __all__ = [
     "UserCreate",
     "UserRead",
     "UserRole",
+    "Webhook",
+    "WebhookCreate",
+    "WebhookCreated",
+    "WebhookEvent",
+    "WebhookRead",
 ]

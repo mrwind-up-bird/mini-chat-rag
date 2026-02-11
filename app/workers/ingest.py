@@ -139,6 +139,20 @@ async def ingest_source(ctx: dict, source_id: str, tenant_id: str) -> dict:
             await session.commit()
 
             logger.info("Ingested source %s: 1 document, %d chunks", source_id, len(chunks))
+
+            # Dispatch webhook (fire-and-forget)
+            try:
+                from app.services.webhook_dispatch import dispatch_webhook_event
+
+                await dispatch_webhook_event(session, tenant_id, "source.ingested", {
+                    "source_id": source_id,
+                    "source_name": source.name,
+                    "document_count": 1,
+                    "chunk_count": len(chunks),
+                })
+            except Exception:
+                logger.warning("Webhook dispatch failed after ingest for source %s", source_id)
+
             return {"document_count": 1, "chunk_count": len(chunks)}
 
         except Exception as exc:
@@ -151,6 +165,18 @@ async def ingest_source(ctx: dict, source_id: str, tenant_id: str) -> dict:
                     await _mark_error(session, source, str(exc)[:2000])
             except Exception:
                 logger.exception("Failed to mark source %s as errored", source_id)
+
+            # Dispatch webhook for failure (fire-and-forget)
+            try:
+                from app.services.webhook_dispatch import dispatch_webhook_event
+
+                await dispatch_webhook_event(session, tenant_id, "source.failed", {
+                    "source_id": source_id,
+                    "error": str(exc)[:500],
+                })
+            except Exception:
+                logger.warning("Webhook dispatch failed after error for source %s", source_id)
+
             return {"error": str(exc)}
 
 

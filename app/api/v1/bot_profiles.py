@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlmodel import select
 
 from app.api.deps import Auth, Session
-from app.core.security import decrypt_value, encrypt_value
+from app.core.security import encrypt_value
 from app.models.base import utcnow
 from app.models.bot_profile import (
     BotProfile,

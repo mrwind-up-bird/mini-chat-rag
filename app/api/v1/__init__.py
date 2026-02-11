@@ -11,6 +11,7 @@ from app.api.v1.stats import router as stats_router
 from app.api.v1.system import router as system_router
 from app.api.v1.tenants import router as tenants_router
 from app.api.v1.users import router as users_router
+from app.api.v1.webhooks import router as webhooks_router
 
 v1_router = APIRouter(prefix="/v1")
 v1_router.include_router(tenants_router)
@@ -22,3 +23,4 @@ v1_router.include_router(chat_router)
 v1_router.include_router(users_router)
 v1_router.include_router(stats_router)
 v1_router.include_router(system_router)
+v1_router.include_router(webhooks_router)

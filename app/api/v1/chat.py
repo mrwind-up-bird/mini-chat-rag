@@ -1,9 +1,12 @@
 """Chat endpoint — the main RAG interaction point."""
 
+import csv
+import io
 import json
 import logging
 import uuid
 from collections.abc import AsyncGenerator
+from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, status
@@ -51,6 +54,92 @@ async def list_chats(
     )
     result = await session.execute(stmt)
     return [ChatRead.model_validate(c) for c in result.scalars().all()]
+
+
+# ── Bulk export (must be before /{chat_id} routes) ────────────
+
+@router.get("/export")
+async def export_chats(
+    auth: Auth,
+    session: Session,
+    bot_profile_id: uuid.UUID | None = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
+    format: str = "json",
+    limit: int = 100,
+):
+    """Export multiple chat sessions with messages."""
+    limit = min(limit, 1000)
+
+    stmt = select(Chat).where(Chat.tenant_id == auth.tenant_id)
+    if bot_profile_id:
+        stmt = stmt.where(Chat.bot_profile_id == bot_profile_id)
+    if from_date:
+        parsed_from = date.fromisoformat(from_date)
+        stmt = stmt.where(Chat.created_at >= parsed_from.isoformat())
+    if to_date:
+        parsed_to = date.fromisoformat(to_date)
+        # Include the full to_date day
+        stmt = stmt.where(Chat.created_at < (parsed_to.isoformat() + "T23:59:59.999999"))
+    stmt = stmt.order_by(Chat.created_at.desc()).limit(limit)  # type: ignore[union-attr]
+
+    result = await session.execute(stmt)
+    chats = result.scalars().all()
+
+    # Load messages for each chat
+    export_data = []
+    for chat_obj in chats:
+        msg_stmt = (
+            select(Message)
+            .where(Message.chat_id == chat_obj.id, Message.tenant_id == auth.tenant_id)
+            .order_by(Message.created_at.asc())  # type: ignore[union-attr]
+        )
+        msg_result = await session.execute(msg_stmt)
+        messages = msg_result.scalars().all()
+        export_data.append({
+            "chat": ChatRead.model_validate(chat_obj),
+            "messages": [MessageRead.model_validate(m) for m in messages],
+        })
+
+    if format == "csv":
+        return _bulk_export_csv(export_data)
+
+    from app.models.base import utcnow
+
+    return {
+        "chats": [
+            {
+                "chat": item["chat"].model_dump(mode="json"),
+                "messages": [m.model_dump(mode="json") for m in item["messages"]],
+            }
+            for item in export_data
+        ],
+        "exported_at": utcnow().isoformat(),
+    }
+
+
+def _bulk_export_csv(export_data: list[dict]) -> StreamingResponse:
+    """Build a CSV StreamingResponse for bulk export."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "chat_id", "chat_title", "message_id", "role", "content",
+        "feedback", "prompt_tokens", "completion_tokens", "created_at",
+    ])
+    for item in export_data:
+        chat = item["chat"]
+        for msg in item["messages"]:
+            writer.writerow([
+                str(chat.id), chat.title, str(msg.id), msg.role, msg.content,
+                msg.feedback or "", msg.prompt_tokens, msg.completion_tokens,
+                msg.created_at.isoformat(),
+            ])
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=chats_export.csv"},
+    )
 
 
 # ── Request / Response schemas ────────────────────────────────
@@ -163,6 +252,18 @@ async def chat(
         result=result,
         is_stream=False,
     )
+
+    # Dispatch webhook (fire-and-forget, don't block response)
+    try:
+        from app.services.webhook_dispatch import dispatch_webhook_event
+
+        await dispatch_webhook_event(session, str(tenant_id), "chat.message", {
+            "chat_id": str(chat_session.id),
+            "message_id": str(assistant_msg.id),
+            "bot_profile_id": str(bot_profile.id),
+        })
+    except Exception:
+        logger.exception("Webhook dispatch failed for chat message")
 
     sources = [
         {
@@ -331,6 +432,57 @@ async def get_chat_messages(
     )
     result = await session.execute(stmt)
     return [MessageRead.model_validate(m) for m in result.scalars().all()]
+
+
+# ── Single chat export ────────────────────────────────────
+
+@router.get("/{chat_id}/export")
+async def export_chat(
+    chat_id: uuid.UUID,
+    auth: Auth,
+    session: Session,
+    format: str = "json",
+):
+    """Export a single chat session with all messages."""
+    chat_session = await _get_chat(chat_id, auth.tenant_id, session)
+
+    stmt = (
+        select(Message)
+        .where(Message.chat_id == chat_id, Message.tenant_id == auth.tenant_id)
+        .order_by(Message.created_at.asc())  # type: ignore[union-attr]
+    )
+    result = await session.execute(stmt)
+    messages = [MessageRead.model_validate(m) for m in result.scalars().all()]
+
+    if format == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "message_id", "role", "content", "feedback",
+            "prompt_tokens", "completion_tokens", "created_at",
+        ])
+        for msg in messages:
+            writer.writerow([
+                str(msg.id), msg.role, msg.content, msg.feedback or "",
+                msg.prompt_tokens, msg.completion_tokens, msg.created_at.isoformat(),
+            ])
+        output.seek(0)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=chat_{chat_id}.csv",
+            },
+        )
+
+    from app.models.base import utcnow
+
+    chat_read = ChatRead.model_validate(chat_session)
+    return {
+        "chat": chat_read.model_dump(mode="json"),
+        "messages": [m.model_dump(mode="json") for m in messages],
+        "exported_at": utcnow().isoformat(),
+    }
 
 
 # ── Message feedback ──────────────────────────────────────
