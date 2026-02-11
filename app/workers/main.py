@@ -2,10 +2,12 @@
 
 import asyncio
 
+from arq import cron
 from arq.connections import RedisSettings
 
 from app.core.config import get_settings
 from app.workers.ingest import ingest_source
+from app.workers.refresh import check_refresh_schedules
 
 
 def _redis_settings() -> RedisSettings:
@@ -27,6 +29,7 @@ def _redis_settings() -> RedisSettings:
 async def startup(ctx: dict) -> None:
     """Called when the worker starts."""
     from app.core.database import init_db
+
     await init_db()
 
 
@@ -36,7 +39,11 @@ async def shutdown(ctx: dict) -> None:
 
 class WorkerSettings:
     """ARQ worker configuration."""
+
     functions = [ingest_source]
+    cron_jobs = [
+        cron(check_refresh_schedules, minute={0, 15, 30, 45}),
+    ]
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = _redis_settings()
@@ -46,4 +53,5 @@ class WorkerSettings:
 
 if __name__ == "__main__":
     from arq import run_worker
+
     asyncio.run(run_worker(WorkerSettings))  # type: ignore[arg-type]

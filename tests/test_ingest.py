@@ -98,6 +98,7 @@ async def test_ingest_source_end_to_end(client: AsyncClient, test_session_factor
     assert source_data["status"] == "ready"
     assert source_data["chunk_count"] == result["chunk_count"]
     assert source_data["document_count"] == 1
+    assert source_data["last_refreshed_at"] is not None
 
 
 @pytest.mark.asyncio

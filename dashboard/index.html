@@ -410,7 +410,7 @@
           <div class="glass-table-wrap">
             <table class="data-table">
               <thead><tr>
-                <th>Name</th><th>Bot</th><th>Type</th><th>Status</th><th>Chunks</th><th>Created</th><th></th>
+                <th>Name</th><th>Bot</th><th>Type</th><th>Status</th><th>Chunks</th><th>Schedule</th><th>Last Refresh</th><th>Created</th><th></th>
               </tr></thead>
               <tbody>
                 <template x-for="row in displayRows" :key="row._key">
@@ -434,6 +434,8 @@
                     <td><span class="badge badge-member" x-text="row.source_type"></span></td>
                     <td><span :class="'badge badge-' + row.status" x-text="row.status"></span></td>
                     <td x-text="row.chunk_count"></td>
+                    <td><span x-show="row.refresh_schedule && row.refresh_schedule !== 'none'" class="badge badge-member text-xs" x-text="row.refresh_schedule"></span><span x-show="!row.refresh_schedule || row.refresh_schedule === 'none'" style="color: rgba(255,255,255,0.25);">—</span></td>
+                    <td class="text-xs" style="color: rgba(255,255,255,0.4);" x-text="row.last_refreshed_at ? formatDate(row.last_refreshed_at) : '—'"></td>
                     <td class="text-xs" style="color: rgba(255,255,255,0.4);" x-text="formatDate(row.created_at)"></td>
                     <td class="text-right space-x-1">
                       <button x-show="row.children_count > 0" @click="ingestChildren(row)" class="btn-success btn-sm"
@@ -488,6 +490,15 @@
                   <label class="form-label">URLs <span class="text-xs opacity-60">(one per line, or comma-separated)</span></label>
                   <textarea x-model="form.config.urls" class="form-input" rows="4"
                             placeholder="https://example.com/page1&#10;https://example.com/page2"></textarea>
+                </div>
+                <div x-show="form.source_type === 'url'">
+                  <label class="form-label">Auto-Refresh Schedule</label>
+                  <select x-model="form.refresh_schedule" class="form-input">
+                    <option value="">No auto-refresh</option>
+                    <option value="hourly">Hourly</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                  </select>
                 </div>
                 <div x-show="form.source_type === 'upload'">
                   <label class="form-label">Files</label>
@@ -1182,7 +1193,7 @@
         loading: false,
         showCreate: false,
         saving: false,
-        form: { bot_profile_id: '', name: '', source_type: 'text', content: '', config: {} },
+        form: { bot_profile_id: '', name: '', source_type: 'text', content: '', config: {}, refresh_schedule: '' },
         uploadFiles: [],
         uploading: false,
         uploadProgress: 0,
@@ -1354,12 +1365,14 @@
               if (!name) {
                 try { const u = new URL(url); name = u.hostname + u.pathname; } catch { name = url; }
               }
-              const source = await API.createSource({
+              const data = {
                 bot_profile_id: this.form.bot_profile_id,
                 name,
                 source_type: 'url',
                 config: { url },
-              });
+              };
+              if (this.form.refresh_schedule) data.refresh_schedule = this.form.refresh_schedule;
+              const source = await API.createSource(data);
               await API.triggerIngest(source.id);
               Alpine.store('toast').success('Source created & ingestion started');
               this.showCreate = false;

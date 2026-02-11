@@ -23,6 +23,13 @@ class SourceStatus(StrEnum):
     ERROR = "error"
 
 
+class RefreshSchedule(StrEnum):
+    NONE = "none"
+    HOURLY = "hourly"
+    DAILY = "daily"
+    WEEKLY = "weekly"
+
+
 class Source(TimestampMixin, SQLModel, table=True):
     __tablename__ = "sources"
 
@@ -30,7 +37,10 @@ class Source(TimestampMixin, SQLModel, table=True):
     tenant_id: uuid.UUID = Field(foreign_key="tenants.id", nullable=False, index=True)
     bot_profile_id: uuid.UUID = Field(foreign_key="bot_profiles.id", nullable=False, index=True)
     parent_id: uuid.UUID | None = Field(
-        default=None, foreign_key="sources.id", nullable=True, index=True,
+        default=None,
+        foreign_key="sources.id",
+        nullable=True,
+        index=True,
     )
 
     name: str = Field(max_length=255, nullable=False)
@@ -52,8 +62,13 @@ class Source(TimestampMixin, SQLModel, table=True):
 
     is_active: bool = Field(default=True)
 
+    # Scheduled refresh
+    refresh_schedule: str | None = Field(default=None, max_length=20)
+    last_refreshed_at: datetime | None = Field(default=None)
+
 
 # ── Pydantic schemas ─────────────────────────────────────────
+
 
 class SourceCreate(SQLModel):
     bot_profile_id: uuid.UUID
@@ -63,6 +78,7 @@ class SourceCreate(SQLModel):
     config: dict = Field(default_factory=dict)
     content: str | None = None
     parent_id: uuid.UUID | None = None
+    refresh_schedule: RefreshSchedule | None = None
 
 
 class SourceUpdate(SQLModel):
@@ -71,6 +87,7 @@ class SourceUpdate(SQLModel):
     config: dict | None = None
     content: str | None = None
     is_active: bool | None = None
+    refresh_schedule: RefreshSchedule | None = Field(default=None)
 
 
 class SourceRead(SQLModel):
@@ -87,6 +104,8 @@ class SourceRead(SQLModel):
     chunk_count: int
     error_message: str | None
     is_active: bool
+    refresh_schedule: str | None = None
+    last_refreshed_at: datetime | None = None
     children_count: int = 0
     created_at: datetime
     updated_at: datetime

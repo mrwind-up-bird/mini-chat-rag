@@ -28,6 +28,7 @@ router = APIRouter(prefix="/sources", tags=["sources"])
 
 # ── Schemas for batch / children endpoints ────────────────────
 
+
 class BatchChildCreate(BaseModel):
     name: str
     description: str = ""
@@ -62,6 +63,7 @@ class IngestChildrenResponse(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────
 
+
 def _to_read(
     src: Source,
     children_count: int = 0,
@@ -84,6 +86,8 @@ def _to_read(
         chunk_count=agg_chunk_count if agg_chunk_count is not None else src.chunk_count,
         error_message=src.error_message,
         is_active=src.is_active,
+        refresh_schedule=src.refresh_schedule,
+        last_refreshed_at=src.last_refreshed_at,
         children_count=children_count,
         created_at=src.created_at,
         updated_at=src.updated_at,
@@ -106,11 +110,15 @@ def _aggregate_status(children: list[Source]) -> SourceStatus:
 
 async def _get_children(parent_id: uuid.UUID, tenant_id: uuid.UUID, session) -> list[Source]:
     """Fetch active children of a parent source."""
-    stmt = select(Source).where(
-        Source.parent_id == parent_id,
-        Source.tenant_id == tenant_id,
-        Source.is_active == True,  # noqa: E712
-    ).order_by(Source.created_at.asc())  # type: ignore[union-attr]
+    stmt = (
+        select(Source)
+        .where(
+            Source.parent_id == parent_id,
+            Source.tenant_id == tenant_id,
+            Source.is_active == True,  # noqa: E712
+        )
+        .order_by(Source.created_at.asc())
+    )  # type: ignore[union-attr]
     result = await session.execute(stmt)
     return list(result.scalars().all())
 
@@ -184,6 +192,7 @@ async def _enqueue_ingest(source_id: uuid.UUID, tenant_id: uuid.UUID) -> None:
 
 
 # ── Endpoints ─────────────────────────────────────────────────
+
 
 @router.post("/batch", response_model=BatchSourceResponse, status_code=status.HTTP_201_CREATED)
 async def create_batch_source(
@@ -260,6 +269,7 @@ async def create_source(
         source_type=body.source_type,
         config=json.dumps(body.config),
         content=body.content,
+        refresh_schedule=body.refresh_schedule,
     )
     session.add(src)
     await session.commit()
@@ -303,11 +313,14 @@ async def list_sources(
             if children:
                 agg_status = _aggregate_status(children)
                 agg_chunk_count = sum(c.chunk_count for c in children)
-                reads.append(_to_read(
-                    src, children_count=len(children),
-                    agg_status=agg_status,
-                    agg_chunk_count=agg_chunk_count,
-                ))
+                reads.append(
+                    _to_read(
+                        src,
+                        children_count=len(children),
+                        agg_status=agg_status,
+                        agg_chunk_count=agg_chunk_count,
+                    )
+                )
             else:
                 reads.append(_to_read(src))
         return reads
@@ -401,7 +414,8 @@ async def get_source(
         agg_status = _aggregate_status(children)
         agg_chunk_count = sum(c.chunk_count for c in children)
         return _to_read(
-            src, children_count=len(children),
+            src,
+            children_count=len(children),
             agg_status=agg_status,
             agg_chunk_count=agg_chunk_count,
         )
@@ -454,6 +468,7 @@ async def delete_source(
 
 
 # ── Ingestion triggers ────────────────────────────────────────
+
 
 @router.post(
     "/{source_id}/ingest",

@@ -6,15 +6,18 @@ import json
 import logging
 import uuid
 
+import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.core.database import async_session_factory
+from app.models.base import utcnow
 from app.models.chunk import Chunk
 from app.models.document import Document
 from app.models.source import Source, SourceStatus
 from app.services.chunking import chunk_text
 from app.services.embedding import embed_texts
+from app.services.html_extract import html_to_text
 from app.services.vector_store import delete_by_source, ensure_collection, upsert_chunks
 
 logger = logging.getLogger(__name__)
@@ -49,7 +52,7 @@ async def ingest_source(ctx: dict, source_id: str, tenant_id: str) -> dict:
             await session.commit()
 
             # 1. Extract raw content
-            raw_content = _extract_content(source)
+            raw_content = await _extract_content(source)
             if not raw_content:
                 await _mark_error(session, source, "No content to ingest")
                 return {"error": "no_content"}
@@ -103,18 +106,20 @@ async def ingest_source(ctx: dict, source_id: str, tenant_id: str) -> dict:
                 )
                 chunk_records.append(chunk_rec)
 
-                qdrant_points.append({
-                    "id": str(chunk_id),
-                    "vector": vector,
-                    "payload": {
-                        "tenant_id": tenant_id,
-                        "source_id": source_id,
-                        "bot_profile_id": str(source.bot_profile_id),
-                        "document_id": str(doc.id),
-                        "chunk_index": tc.index,
-                        "content": tc.content,
-                    },
-                })
+                qdrant_points.append(
+                    {
+                        "id": str(chunk_id),
+                        "vector": vector,
+                        "payload": {
+                            "tenant_id": tenant_id,
+                            "source_id": source_id,
+                            "bot_profile_id": str(source.bot_profile_id),
+                            "document_id": str(doc.id),
+                            "chunk_index": tc.index,
+                            "content": tc.content,
+                        },
+                    }
+                )
 
             session.add_all(chunk_records)
 
@@ -129,12 +134,11 @@ async def ingest_source(ctx: dict, source_id: str, tenant_id: str) -> dict:
             source.document_count = 1
             source.chunk_count = len(chunks)
             source.error_message = None
+            source.last_refreshed_at = utcnow()
             session.add(source)
             await session.commit()
 
-            logger.info(
-                "Ingested source %s: 1 document, %d chunks", source_id, len(chunks)
-            )
+            logger.info("Ingested source %s: 1 document, %d chunks", source_id, len(chunks))
             return {"document_count": 1, "chunk_count": len(chunks)}
 
         except Exception as exc:
@@ -150,17 +154,24 @@ async def ingest_source(ctx: dict, source_id: str, tenant_id: str) -> dict:
             return {"error": str(exc)}
 
 
-def _extract_content(source: Source) -> str:
+async def _extract_content(source: Source) -> str:
     """Extract raw text from a source based on its type."""
     if source.source_type == "text":
         return source.content or ""
-    # Future: handle "upload" (read file), "url" (fetch page)
+    if source.source_type == "url":
+        config = json.loads(source.config) if isinstance(source.config, str) else source.config
+        url = config.get("url", "")
+        if not url:
+            return ""
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            resp = await client.get(url, headers={"User-Agent": "MiniRAG/1.0"})
+            resp.raise_for_status()
+            return html_to_text(resp.text)
+    # Upload sources: content already extracted at upload time
     return source.content or ""
 
 
-async def _get_source(
-    session: AsyncSession, source_id: str, tenant_id: str
-) -> Source | None:
+async def _get_source(session: AsyncSession, source_id: str, tenant_id: str) -> Source | None:
     stmt = select(Source).where(
         Source.id == uuid.UUID(source_id),
         Source.tenant_id == uuid.UUID(tenant_id),
