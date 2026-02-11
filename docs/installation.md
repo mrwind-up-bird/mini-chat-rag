@@ -69,6 +69,10 @@ source .venv/bin/activate
 python -m app.workers.main
 ```
 
+The worker handles:
+- **Ingestion tasks** — Processing sources into chunks and vectors
+- **Auto-refresh cron** — Checks every 15 minutes for URL sources with scheduled re-ingestion (hourly/daily/weekly)
+
 ### 6. Access the Dashboard
 
 Open `http://localhost:8000/dashboard` in your browser.
@@ -99,25 +103,60 @@ docker compose up -d
 ```
 
 Services:
-- **postgres** — `localhost:5432`
-- **qdrant** — `localhost:6333` (REST), `localhost:6334` (gRPC)
-- **redis** — `localhost:6379`
+- **postgres** — `localhost:5432` (metadata, auth)
+- **qdrant** — `localhost:6333` (REST), `localhost:6334` (gRPC) — vector storage
+- **redis** — `localhost:6379` (task queue)
 - **web** — `localhost:8000` (API + Dashboard)
-- **worker** — ARQ background worker
+- **worker** — ARQ background worker (ingestion + auto-refresh cron)
+- **caddy** — `localhost:80/443` (reverse proxy with auto-TLS)
+
+## Database Migrations (Alembic)
+
+MiniRAG uses Alembic for database schema migrations in production:
+
+```bash
+# Run pending migrations
+docker compose exec web alembic upgrade head
+
+# Check current migration status
+docker compose exec web alembic current
+
+# View migration history
+docker compose exec web alembic history
+
+# Generate a new migration after model changes
+docker compose exec web alembic revision --autogenerate -m "description"
+```
+
+The Alembic configuration uses async SQLAlchemy and loads the database URL from the application settings automatically.
+
+**Important:** After deploying new code that includes model changes, always run `alembic upgrade head` before restarting the web service. For Docker deployments, this can be added to your startup script or CI/CD pipeline.
 
 ## Running Tests
 
 Tests use SQLite in-memory (no Docker needed):
 
 ```bash
+# Run all tests
 pytest tests/ -v
+
+# Run a specific test file
+pytest tests/test_webhooks.py -v
+
+# Run a single test
+pytest tests/test_chat.py::test_chat_new_conversation -v
 ```
+
+Currently 129 tests covering auth, CRUD, ingestion, chat, streaming, webhooks, export, analytics, and more.
 
 ## Production Considerations
 
-- Use Alembic for database migrations instead of `create_all`
+- Run `alembic upgrade head` after every deployment with schema changes
 - Set strong `ENCRYPTION_KEY` and `JWT_SECRET_KEY` values
 - Configure CORS `allow_origins` to your domain (not `*`)
-- Use a reverse proxy (nginx/Caddy) for TLS termination
+- Use Caddy or nginx for TLS termination (Caddy handles auto-TLS via Let's Encrypt)
 - Set `JWT_EXPIRE_MINUTES` to an appropriate value
 - Monitor with the `/v1/system/health` endpoint
+- Set up webhook endpoints to receive notifications for ingestion and chat events
+- Consider log aggregation for the web and worker containers
+- Back up PostgreSQL regularly; Qdrant vectors can be rebuilt from source content via re-ingestion
