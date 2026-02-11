@@ -760,7 +760,7 @@
           </div>
 
           <!-- Cost summary cards -->
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8" x-show="costEstimate">
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8" x-show="costEstimate && !loading">
             <div class="stat-card p-5">
               <div class="text-sm" style="color: rgba(255,255,255,0.5);">Total Cost</div>
               <div class="text-2xl font-bold mt-1" x-text="formatUsd(costEstimate?.total_cost_usd)"></div>
@@ -783,15 +783,42 @@
             </div>
           </div>
 
+          <!-- Loading skeleton -->
+          <template x-if="loading">
+            <div>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <template x-for="i in 4" :key="i">
+                  <div class="stat-card p-5">
+                    <div class="skeleton skeleton-text" style="width: 60%;"></div>
+                    <div class="skeleton skeleton-heading mt-2"></div>
+                    <div class="skeleton skeleton-text mt-2" style="width: 50%;"></div>
+                  </div>
+                </template>
+              </div>
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <div class="glass-card-static p-5">
+                  <div class="skeleton skeleton-text mb-3" style="width: 40%;"></div>
+                  <div class="skeleton" style="height: 200px; border-radius: 8px;"></div>
+                </div>
+                <div class="glass-card-static p-5">
+                  <div class="skeleton skeleton-text mb-3" style="width: 40%;"></div>
+                  <div class="skeleton" style="height: 200px; border-radius: 8px;"></div>
+                </div>
+              </div>
+            </div>
+          </template>
+
           <!-- Charts -->
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <div x-show="!loading" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <div class="glass-card-static p-5">
-              <h3 class="font-semibold mb-3">Token Usage by Day</h3>
+              <h3 class="font-semibold mb-3" x-text="'Token Usage by Day (' + dateRangeLabel + ')'"></h3>
               <canvas x-ref="dailyChart" height="200"></canvas>
+              <div x-show="usageData.length === 0" class="empty-state" style="padding: 24px 16px;"><p>No token data for this period.</p></div>
             </div>
             <div class="glass-card-static p-5">
-              <h3 class="font-semibold mb-3">Cost by Model</h3>
+              <h3 class="font-semibold mb-3" x-text="'Cost by Model (' + dateRangeLabel + ')'"></h3>
               <canvas x-ref="modelChart" height="200"></canvas>
+              <div x-show="modelData.length === 0" class="empty-state" style="padding: 24px 16px;"><p>No model data for this period.</p></div>
             </div>
           </div>
 
@@ -1540,20 +1567,9 @@
     }
 
     function usagePage() {
-      // Client-side pricing map (mirrors backend MODEL_PRICING)
-      const MODEL_PRICING = {
-        'gpt-4o': [2.50, 10.00], 'gpt-4o-mini': [0.15, 0.60],
-        'gpt-4-turbo': [10.00, 30.00], 'gpt-4': [30.00, 60.00],
-        'gpt-3.5-turbo': [0.50, 1.50], 'o1': [15.00, 60.00],
-        'o1-mini': [3.00, 12.00], 'o3-mini': [1.10, 4.40],
-        'claude-opus-4-6': [15.00, 75.00],
-        'claude-sonnet-4-5-20250929': [3.00, 15.00],
-        'claude-haiku-4-5-20251001': [0.80, 4.00],
-        'gemini/gemini-2.0-flash': [0.10, 0.40],
-        'gemini/gemini-1.5-pro': [1.25, 5.00],
-        'gemini/gemini-1.5-flash': [0.075, 0.30],
-      };
-      const DEFAULT_PRICING = [1.00, 3.00];
+      // Pricing fetched from GET /v1/stats/pricing — single source of truth on the backend.
+      let _pricingMap = {};
+      let _defaultPricing = [1.00, 3.00];
 
       return {
         usageData: [],
@@ -1571,6 +1587,11 @@
           { id: 'daily', label: 'Daily Breakdown' },
         ],
 
+        get dateRangeLabel() {
+          const labels = { '7': 'Last 7 days', '30': 'Last 30 days', '90': 'Last 90 days' };
+          return labels[this.selectedDays] || 'All time';
+        },
+
         get totalRequests() {
           if (!this.costEstimate) return 0;
           return this.costEstimate.by_model.reduce((s, m) => s + m.request_count, 0);
@@ -1583,7 +1604,9 @@
         },
 
         calcRowCost(row) {
-          const [pRate, cRate] = MODEL_PRICING[row.model] || DEFAULT_PRICING;
+          const entry = _pricingMap[row.model];
+          const pRate = entry ? entry.prompt_cost_per_1m : _defaultPricing[0];
+          const cRate = entry ? entry.completion_cost_per_1m : _defaultPricing[1];
           return (row.prompt_tokens * pRate + row.completion_tokens * cRate) / 1_000_000;
         },
 
@@ -1591,12 +1614,15 @@
           this.loading = true;
           try {
             const d = this.selectedDays ? parseInt(this.selectedDays) : null;
-            const [usage, models, bots, estimate] = await Promise.all([
+            const [usage, models, bots, estimate, pricing] = await Promise.all([
               API.getUsage(d),
               API.getUsageByModel(d),
               API.getUsageByBot(d),
               API.getCostEstimate(d || 30),
+              API.getPricing(),
             ]);
+            _pricingMap = pricing.models;
+            _defaultPricing = [pricing.default.prompt_cost_per_1m, pricing.default.completion_cost_per_1m];
             this.usageData = usage;
             this.modelData = models;
             this.botData = bots;

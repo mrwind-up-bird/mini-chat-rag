@@ -9,6 +9,8 @@ from sqlalchemy import func
 from sqlmodel import select
 
 from app.api.deps import Auth, Session
+from app.core import cache
+from app.core.pricing import MODEL_PRICING, calc_cost, get_pricing
 from app.models.base import utcnow
 from app.models.bot_profile import BotProfile
 from app.models.chat import Chat
@@ -16,44 +18,6 @@ from app.models.source import Source
 from app.models.usage_event import UsageEvent
 
 router = APIRouter(prefix="/stats", tags=["stats"])
-
-
-# ── Pricing (USD per 1M tokens) ─────────────────────────────
-# Maps model identifiers to (prompt_cost, completion_cost) per 1M tokens.
-# Updated periodically — unknown models fall back to a conservative estimate.
-MODEL_PRICING: dict[str, tuple[float, float]] = {
-    # OpenAI
-    "gpt-4o":              (2.50,  10.00),
-    "gpt-4o-mini":         (0.15,   0.60),
-    "gpt-4-turbo":         (10.00,  30.00),
-    "gpt-4":               (30.00,  60.00),
-    "gpt-3.5-turbo":       (0.50,   1.50),
-    "o1":                  (15.00,  60.00),
-    "o1-mini":             (3.00,   12.00),
-    "o3-mini":             (1.10,   4.40),
-    # Anthropic (via LiteLLM)
-    "claude-opus-4-6":                (15.00, 75.00),
-    "claude-sonnet-4-5-20250929":     (3.00,  15.00),
-    "claude-haiku-4-5-20251001":      (0.80,   4.00),
-    # Google (via LiteLLM)
-    "gemini/gemini-2.0-flash":        (0.10,   0.40),
-    "gemini/gemini-1.5-pro":          (1.25,   5.00),
-    "gemini/gemini-1.5-flash":        (0.075,  0.30),
-}
-
-# Fallback for unknown models
-_DEFAULT_PRICING = (1.00, 3.00)
-
-
-def _get_pricing(model: str) -> tuple[float, float]:
-    """Return (prompt_per_1M, completion_per_1M) for a model."""
-    return MODEL_PRICING.get(model, _DEFAULT_PRICING)
-
-
-def _calc_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
-    """Calculate USD cost for a given model and token counts."""
-    prompt_rate, completion_rate = _get_pricing(model)
-    return (prompt_tokens * prompt_rate + completion_tokens * completion_rate) / 1_000_000
 
 
 # ── Schemas ──────────────────────────────────────────────────
@@ -107,12 +71,43 @@ class CostEstimate(BaseModel):
     by_bot: list[BotUsage]
 
 
+class ModelPricingEntry(BaseModel):
+    prompt_cost_per_1m: float
+    completion_cost_per_1m: float
+
+
+class PricingResponse(BaseModel):
+    models: dict[str, ModelPricingEntry]
+    default: ModelPricingEntry
+
+
 # ── Routes ───────────────────────────────────────────────────
+
+@router.get("/pricing", response_model=PricingResponse)
+async def get_pricing_map(auth: Auth) -> PricingResponse:
+    """Return the model pricing table so clients don't need a local copy."""
+    return PricingResponse(
+        models={
+            model: ModelPricingEntry(
+                prompt_cost_per_1m=rates[0],
+                completion_cost_per_1m=rates[1],
+            )
+            for model, rates in MODEL_PRICING.items()
+        },
+        default=ModelPricingEntry(
+            prompt_cost_per_1m=get_pricing("__unknown__")[0],
+            completion_cost_per_1m=get_pricing("__unknown__")[1],
+        ),
+    )
 
 @router.get("/overview", response_model=OverviewStats)
 async def get_overview(auth: Auth, session: Session) -> OverviewStats:
     """Summary counts for the tenant."""
     tid = auth.tenant_id
+    cache_key = ("stats", "overview", tid)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
 
     bp_count = (await session.execute(
         select(func.count()).select_from(BotProfile).where(BotProfile.tenant_id == tid)
@@ -134,7 +129,7 @@ async def get_overview(auth: Auth, session: Session) -> OverviewStats:
         ).where(UsageEvent.tenant_id == tid)
     )).one()
 
-    return OverviewStats(
+    result = OverviewStats(
         bot_profiles=bp_count,
         sources=src_count,
         chats=chat_count,
@@ -142,6 +137,8 @@ async def get_overview(auth: Auth, session: Session) -> OverviewStats:
         total_completion_tokens=token_sums[1],
         total_tokens=token_sums[2],
     )
+    cache.put(cache_key, result)
+    return result
 
 
 @router.get("/usage", response_model=list[DailyUsage])
@@ -151,6 +148,11 @@ async def get_usage(
     days: int | None = None,
 ) -> list[DailyUsage]:
     """Token usage aggregated by day and model."""
+    cache_key = ("stats", "usage", auth.tenant_id, days)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     filters = [UsageEvent.tenant_id == auth.tenant_id]
     if days is not None:
         filters.append(UsageEvent.created_at >= utcnow() - timedelta(days=days))
@@ -170,7 +172,7 @@ async def get_usage(
     )
     result = await session.execute(stmt)
 
-    return [
+    data = [
         DailyUsage(
             date=str(row.date),
             model=row.model,
@@ -181,6 +183,8 @@ async def get_usage(
         )
         for row in result.all()
     ]
+    cache.put(cache_key, data)
+    return data
 
 
 @router.get("/usage/by-bot", response_model=list[BotUsage])
@@ -190,6 +194,11 @@ async def get_usage_by_bot(
     days: int | None = None,
 ) -> list[BotUsage]:
     """Token usage aggregated by bot profile."""
+    cache_key = ("stats", "by-bot", auth.tenant_id, days)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     filters = [UsageEvent.tenant_id == auth.tenant_id]
     if days is not None:
         filters.append(UsageEvent.created_at >= utcnow() - timedelta(days=days))
@@ -210,7 +219,7 @@ async def get_usage_by_bot(
     )
     result = await session.execute(stmt)
 
-    return [
+    data = [
         BotUsage(
             bot_profile_id=row.bot_profile_id,
             bot_name=row.bot_name,
@@ -219,10 +228,12 @@ async def get_usage_by_bot(
             completion_tokens=row.completion_tokens,
             total_tokens=row.total_tokens,
             request_count=row.request_count,
-            cost_usd=round(_calc_cost(row.model, row.prompt_tokens, row.completion_tokens), 6),
+            cost_usd=round(calc_cost(row.model, row.prompt_tokens, row.completion_tokens), 6),
         )
         for row in result.all()
     ]
+    cache.put(cache_key, data)
+    return data
 
 
 @router.get("/usage/by-model", response_model=list[ModelUsage])
@@ -232,6 +243,11 @@ async def get_usage_by_model(
     days: int | None = None,
 ) -> list[ModelUsage]:
     """Token usage aggregated by model with cost breakdown."""
+    cache_key = ("stats", "by-model", auth.tenant_id, days)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     filters = [UsageEvent.tenant_id == auth.tenant_id]
     if days is not None:
         filters.append(UsageEvent.created_at >= utcnow() - timedelta(days=days))
@@ -249,19 +265,21 @@ async def get_usage_by_model(
     )
     result = await session.execute(stmt)
 
-    return [
+    data = [
         ModelUsage(
             model=row.model,
             prompt_tokens=row.prompt_tokens,
             completion_tokens=row.completion_tokens,
             total_tokens=row.total_tokens,
             request_count=row.request_count,
-            cost_usd=round(_calc_cost(row.model, row.prompt_tokens, row.completion_tokens), 6),
-            prompt_cost_per_1m=_get_pricing(row.model)[0],
-            completion_cost_per_1m=_get_pricing(row.model)[1],
+            cost_usd=round(calc_cost(row.model, row.prompt_tokens, row.completion_tokens), 6),
+            prompt_cost_per_1m=get_pricing(row.model)[0],
+            completion_cost_per_1m=get_pricing(row.model)[1],
         )
         for row in result.all()
     ]
+    cache.put(cache_key, data)
+    return data
 
 
 @router.get("/cost-estimate", response_model=CostEstimate)
@@ -276,6 +294,11 @@ async def get_cost_estimate(
     and project monthly costs.
     """
     tid = auth.tenant_id
+    cache_key = ("stats", "cost-estimate", tid, days)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     cutoff = utcnow() - timedelta(days=days)
 
     # Per-model aggregation over the window
@@ -322,9 +345,9 @@ async def get_cost_estimate(
     by_model = []
     total_cost = 0.0
     for row in model_result:
-        cost = _calc_cost(row.model, row.prompt_tokens, row.completion_tokens)
+        cost = calc_cost(row.model, row.prompt_tokens, row.completion_tokens)
         total_cost += cost
-        p_rate, c_rate = _get_pricing(row.model)
+        p_rate, c_rate = get_pricing(row.model)
         by_model.append(ModelUsage(
             model=row.model,
             prompt_tokens=row.prompt_tokens,
@@ -346,14 +369,14 @@ async def get_cost_estimate(
             completion_tokens=row.completion_tokens,
             total_tokens=row.total_tokens,
             request_count=row.request_count,
-            cost_usd=round(_calc_cost(row.model, row.prompt_tokens, row.completion_tokens), 6),
+            cost_usd=round(calc_cost(row.model, row.prompt_tokens, row.completion_tokens), 6),
         )
         for row in bot_result
     ]
 
     daily_avg = total_cost / active_days if active_days > 0 else 0.0
 
-    return CostEstimate(
+    result = CostEstimate(
         total_cost_usd=round(total_cost, 6),
         daily_avg_cost_usd=round(daily_avg, 6),
         projected_monthly_usd=round(daily_avg * 30, 2),
@@ -361,3 +384,5 @@ async def get_cost_estimate(
         by_model=by_model,
         by_bot=by_bot,
     )
+    cache.put(cache_key, result)
+    return result

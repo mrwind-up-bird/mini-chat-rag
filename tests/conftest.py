@@ -10,6 +10,7 @@ from sqlmodel import SQLModel
 
 # Import all models so metadata is populated
 import app.models  # noqa: F401
+from app.core import cache
 from app.core.database import get_session
 from app.main import app
 
@@ -44,9 +45,11 @@ async def client(session) -> AsyncGenerator[AsyncClient, None]:
         yield session
 
     app.dependency_overrides[get_session] = _override_session
+    cache.clear()
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 
     app.dependency_overrides.clear()
+    cache.clear()

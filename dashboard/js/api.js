@@ -189,6 +189,9 @@ const API = {
   getCostEstimate(days = 30) {
     return this.get(`/v1/stats/cost-estimate?days=${days}`);
   },
+  getPricing() {
+    return this.get('/v1/stats/pricing');
+  },
 
   // ── System ────────────────────────────────────────────
   getSystemHealth() {

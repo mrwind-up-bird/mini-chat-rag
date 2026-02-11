@@ -252,8 +252,43 @@ async def test_days_filter_on_all_endpoints(client: AsyncClient, session: AsyncS
 
 
 @pytest.mark.asyncio
+async def test_pricing_endpoint(client: AsyncClient):
+    """GET /v1/stats/pricing returns the model pricing map."""
+    headers = await _bootstrap(client, slug="stats-pricing")
+
+    resp = await client.get("/v1/stats/pricing", headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "models" in data
+    assert "default" in data
+    # Verify a known model is present with correct structure
+    assert "gpt-4o-mini" in data["models"]
+    gpt4o_mini = data["models"]["gpt-4o-mini"]
+    assert gpt4o_mini["prompt_cost_per_1m"] == 0.15
+    assert gpt4o_mini["completion_cost_per_1m"] == 0.60
+    # Verify default fallback is present
+    assert data["default"]["prompt_cost_per_1m"] > 0
+    assert data["default"]["completion_cost_per_1m"] > 0
+
+
+@pytest.mark.asyncio
+async def test_stats_caching(client: AsyncClient, session: AsyncSession):
+    """Stats endpoints return cached data on repeated calls."""
+    headers, _, _ = await _bootstrap_with_usage(client, session, slug="stats-cache")
+
+    # First call populates cache
+    resp1 = await client.get("/v1/stats/overview", headers=headers)
+    assert resp1.status_code == 200
+
+    # Second call should return identical data (from cache)
+    resp2 = await client.get("/v1/stats/overview", headers=headers)
+    assert resp2.status_code == 200
+    assert resp1.json() == resp2.json()
+
+
+@pytest.mark.asyncio
 async def test_new_stats_require_auth(client: AsyncClient):
     """New stats endpoints require authentication."""
-    for path in ["/v1/stats/usage/by-model", "/v1/stats/usage/by-bot", "/v1/stats/cost-estimate"]:
+    for path in ["/v1/stats/usage/by-model", "/v1/stats/usage/by-bot", "/v1/stats/cost-estimate", "/v1/stats/pricing"]:
         resp = await client.get(path)
         assert resp.status_code in (401, 403), f"{path} should require auth"
