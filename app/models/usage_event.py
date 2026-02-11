@@ -22,6 +22,11 @@ class UsageEvent(TimestampMixin, SQLModel, table=True):
     completion_tokens: int = Field(default=0)
     total_tokens: int = Field(default=0)
 
+    # Streaming metrics
+    is_stream: bool = Field(default=False)
+    time_to_first_token_ms: int | None = Field(default=None)
+    stream_duration_ms: int | None = Field(default=None)
+
 
 # ── Pydantic schemas ─────────────────────────────────────────
 
@@ -33,4 +38,7 @@ class UsageEventRead(SQLModel):
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
+    is_stream: bool
+    time_to_first_token_ms: int | None = None
+    stream_duration_ms: int | None = None
     created_at: datetime

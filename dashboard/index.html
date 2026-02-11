@@ -1100,18 +1100,49 @@
           this.tryInput = '';
           this.tryMessages.push({ role: 'user', content: msg });
           this.trySending = true;
+
+          // Create a placeholder assistant message for streaming
+          const assistantMsg = { role: 'assistant', content: '', id: null, feedback: null, streaming: true };
+          this.tryMessages.push(assistantMsg);
+
+          const scrollToBottom = () => {
+            this.$nextTick(() => {
+              const el = this.$refs.tryChatMessages;
+              if (el) el.scrollTop = el.scrollHeight;
+            });
+          };
+
           try {
-            const resp = await API.sendMessage(this.tryingBot.id, msg, this.tryChatId);
-            this.tryChatId = resp.chat_id;
-            this.tryMessages.push({ role: 'assistant', content: resp.message.content, id: resp.message.id });
+            await API.sendMessageStream(this.tryingBot.id, msg, this.tryChatId, {
+              onDelta: (content) => {
+                assistantMsg.content += content;
+                scrollToBottom();
+              },
+              onSources: (sources) => {
+                assistantMsg.sources = sources;
+              },
+              onDone: (data) => {
+                this.tryChatId = data.chat_id;
+                assistantMsg.id = data.message_id;
+                assistantMsg.streaming = false;
+                this.trySending = false;
+                scrollToBottom();
+              },
+              onError: (detail) => {
+                if (!assistantMsg.content) {
+                  assistantMsg.content = `Error: ${detail}`;
+                }
+                assistantMsg.streaming = false;
+                this.trySending = false;
+                scrollToBottom();
+              },
+            });
           } catch (e) {
-            this.tryMessages.push({ role: 'assistant', content: `Error: ${e.message}` });
+            assistantMsg.content = `Error: ${e.message}`;
+            assistantMsg.streaming = false;
+            this.trySending = false;
+            scrollToBottom();
           }
-          this.trySending = false;
-          this.$nextTick(() => {
-            const el = this.$refs.tryChatMessages;
-            if (el) el.scrollTop = el.scrollHeight;
-          });
         },
 
         showEmbed(bot) {

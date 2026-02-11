@@ -144,6 +144,106 @@ const API = {
     if (chatId) body.chat_id = chatId;
     return this.post('/v1/chat', body);
   },
+
+  /**
+   * Send a chat message with streaming SSE response.
+   *
+   * @param {string} botProfileId - Bot profile UUID
+   * @param {string} message - User message text
+   * @param {string|null} chatId - Existing chat session ID (null for new)
+   * @param {object} callbacks - { onDelta, onSources, onDone, onError }
+   * @returns {Promise<void>}
+   */
+  async sendMessageStream(botProfileId, message, chatId, { onDelta, onSources, onDone, onError }) {
+    const headers = { 'Content-Type': 'application/json' };
+    const token = this.getToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const body = { bot_profile_id: botProfileId, message, stream: true };
+    if (chatId) body.chat_id = chatId;
+
+    let resp;
+    try {
+      resp = await fetch(`${this.baseUrl}/v1/chat`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+    } catch (err) {
+      onError?.(err.message || 'Network error');
+      return;
+    }
+
+    if (resp.status === 401) {
+      this.clearToken();
+      window.dispatchEvent(new CustomEvent('minirag:unauthorized'));
+      onError?.('Unauthorized');
+      return;
+    }
+
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      onError?.(data.detail || `HTTP ${resp.status}`);
+      return;
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Parse SSE events from buffer
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop(); // Keep incomplete part in buffer
+
+        for (const part of parts) {
+          if (!part.trim()) continue;
+
+          let eventType = 'message';
+          let dataStr = '';
+
+          for (const line of part.split('\n')) {
+            if (line.startsWith('event: ')) {
+              eventType = line.slice(7);
+            } else if (line.startsWith('data: ')) {
+              dataStr += line.slice(6);
+            }
+          }
+
+          if (!dataStr) continue;
+
+          try {
+            const data = JSON.parse(dataStr);
+
+            switch (eventType) {
+              case 'delta':
+                onDelta?.(data.content);
+                break;
+              case 'sources':
+                onSources?.(data.sources);
+                break;
+              case 'done':
+                onDone?.(data);
+                break;
+              case 'error':
+                onError?.(data.detail || 'Stream error');
+                break;
+            }
+          } catch {
+            // Ignore malformed JSON
+          }
+        }
+      }
+    } catch (err) {
+      onError?.(err.message || 'Stream read error');
+    }
+  },
   submitFeedback(chatId, messageId, feedback) {
     return this.patch(`/v1/chat/${chatId}/messages/${messageId}/feedback`, { feedback });
   },

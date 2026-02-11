@@ -184,6 +184,10 @@
     async _send(text) {
       this._messages.push({ role: 'user', content: text });
       this._sending = true;
+
+      // Add placeholder assistant message for streaming
+      const assistantMsg = { role: 'assistant', content: '', sources: [] };
+      this._messages.push(assistantMsg);
       this._render();
 
       try {
@@ -197,6 +201,7 @@
             bot_profile_id: this._config.botId,
             message: text,
             chat_id: this._chatId || undefined,
+            stream: true,
           }),
         });
 
@@ -205,19 +210,70 @@
           throw new Error(err.detail || `HTTP ${resp.status}`);
         }
 
-        const data = await resp.json();
-        this._chatId = data.chat_id;
-        this._messages.push({
-          role: 'assistant',
-          content: data.message.content,
-          sources: data.sources || [],
-        });
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop();
+
+          for (const part of parts) {
+            if (!part.trim()) continue;
+            let eventType = 'message';
+            let dataStr = '';
+
+            for (const line of part.split('\n')) {
+              if (line.startsWith('event: ')) eventType = line.slice(7);
+              else if (line.startsWith('data: ')) dataStr += line.slice(6);
+            }
+            if (!dataStr) continue;
+
+            try {
+              const data = JSON.parse(dataStr);
+              if (eventType === 'delta') {
+                assistantMsg.content += data.content;
+                this._updateStreamingMessage(assistantMsg);
+              } else if (eventType === 'sources') {
+                assistantMsg.sources = data.sources || [];
+              } else if (eventType === 'done') {
+                this._chatId = data.chat_id;
+              } else if (eventType === 'error') {
+                throw new Error(data.detail || 'Stream error');
+              }
+            } catch (e) {
+              if (e.message && e.message !== 'Stream error') {
+                // JSON parse error, ignore
+              } else {
+                throw e;
+              }
+            }
+          }
+        }
       } catch (e) {
-        this._messages.push({ role: 'assistant', content: `Sorry, something went wrong: ${e.message}` });
+        if (!assistantMsg.content) {
+          assistantMsg.content = `Sorry, something went wrong: ${e.message}`;
+        }
       }
 
       this._sending = false;
       this._render();
+    }
+
+    _updateStreamingMessage(msg) {
+      // Update only the last message bubble without full re-render
+      const msgs = this.shadowRoot.querySelector('.widget-messages');
+      if (!msgs) return;
+      const bubbles = msgs.querySelectorAll('.msg');
+      const last = bubbles[bubbles.length - 1];
+      if (last) {
+        last.textContent = msg.content;
+        msgs.scrollTop = msgs.scrollHeight;
+      }
     }
 
     _escHtml(s) {

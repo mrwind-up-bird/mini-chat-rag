@@ -1,10 +1,13 @@
 """Chat endpoint — the main RAG interaction point."""
 
 import json
+import logging
 import uuid
+from collections.abc import AsyncGenerator
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlmodel import select
 
@@ -14,7 +17,14 @@ from app.models.bot_profile import BotProfile
 from app.models.chat import Chat, ChatRead
 from app.models.message import Message, MessageRead, MessageRole
 from app.models.usage_event import UsageEvent
-from app.services.orchestrator import run_chat_turn
+from app.services.orchestrator import (
+    ChatResponse,
+    StreamEvent,
+    run_chat_turn,
+    run_chat_turn_stream,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -52,6 +62,10 @@ class ChatRequest(BaseModel):
         default=None,
         description="Existing chat session ID. Omit to start a new conversation.",
     )
+    stream: bool = Field(
+        default=False,
+        description="If true, response is streamed as Server-Sent Events.",
+    )
 
 
 class ChatMessageResponse(BaseModel):
@@ -71,19 +85,20 @@ async def chat(
     body: ChatRequest,
     auth: Auth,
     session: Session,
-) -> ChatMessageResponse:
+):
     """Send a message and get a RAG-augmented response.
 
     Creates a new chat session if chat_id is not provided.
     Retrieves relevant context from the knowledge base, then generates
     a response using the configured LLM.
-    """
-    tenant_id = auth.tenant_id
 
-    # 1. Load bot profile (tenant-scoped)
+    When ``stream=true``, returns ``text/event-stream`` with delta/sources/done
+    events. Otherwise returns the complete ChatMessageResponse JSON.
+    """
+    # ── Shared setup (runs before streaming starts) ──────────
+    tenant_id = auth.tenant_id
     bot_profile = await _get_bot_profile(body.bot_profile_id, tenant_id, session)
 
-    # 2. Resolve or create chat session
     if body.chat_id:
         chat_session = await _get_chat(body.chat_id, tenant_id, session)
     else:
@@ -96,10 +111,8 @@ async def chat(
         session.add(chat_session)
         await session.flush()
 
-    # 3. Load conversation history (before saving new message)
     history = await _load_history(chat_session.id, session)
 
-    # 4. Save user message
     user_msg = Message(
         tenant_id=tenant_id,
         chat_id=chat_session.id,
@@ -109,13 +122,31 @@ async def chat(
     session.add(user_msg)
     await session.flush()
 
-    # 5. Decrypt provider credentials if set
     api_key = None
     if bot_profile.encrypted_credentials:
         creds = json.loads(decrypt_value(bot_profile.encrypted_credentials))
         api_key = creds.get("api_key")
 
-    # 6. Run the RAG orchestrator
+    # ── Streaming path ───────────────────────────────────────
+    if body.stream:
+        return StreamingResponse(
+            _stream_chat_sse(
+                body=body,
+                tenant_id=tenant_id,
+                bot_profile=bot_profile,
+                chat_session=chat_session,
+                history=history,
+                api_key=api_key,
+                session=session,
+            ),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    # ── Non-streaming path (unchanged) ───────────────────────
     result = await run_chat_turn(
         user_message=body.message,
         bot_profile=bot_profile,
@@ -124,43 +155,15 @@ async def chat(
         api_key=api_key,
     )
 
-    # 7. Save assistant message
-    chunk_ids = [c.chunk_id for c in result.retrieved_chunks]
-    assistant_msg = Message(
+    assistant_msg = await _persist_assistant_message(
+        session=session,
         tenant_id=tenant_id,
-        chat_id=chat_session.id,
-        role=MessageRole.ASSISTANT,
-        content=result.content,
-        prompt_tokens=result.prompt_tokens,
-        completion_tokens=result.completion_tokens,
-        context_chunks=json.dumps(chunk_ids),
+        chat_session=chat_session,
+        bot_profile=bot_profile,
+        result=result,
+        is_stream=False,
     )
-    session.add(assistant_msg)
-    await session.flush()
 
-    # 8. Record usage event
-    usage_event = UsageEvent(
-        tenant_id=tenant_id,
-        chat_id=chat_session.id,
-        message_id=assistant_msg.id,
-        bot_profile_id=bot_profile.id,
-        model=result.model,
-        prompt_tokens=result.prompt_tokens,
-        completion_tokens=result.completion_tokens,
-        total_tokens=result.total_tokens,
-    )
-    session.add(usage_event)
-
-    # 9. Update chat counters
-    chat_session.message_count += 2  # user + assistant
-    chat_session.total_prompt_tokens += result.prompt_tokens
-    chat_session.total_completion_tokens += result.completion_tokens
-    session.add(chat_session)
-
-    await session.commit()
-    await session.refresh(assistant_msg)
-
-    # 10. Build response
     sources = [
         {
             "chunk_id": c.chunk_id,
@@ -191,6 +194,114 @@ async def chat(
             "total_tokens": result.total_tokens,
         },
     )
+
+
+# ── SSE streaming generator ──────────────────────────────────
+
+def _format_sse(event: str, data: dict) -> str:
+    """Format a single SSE event."""
+    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+
+async def _stream_chat_sse(
+    body: ChatRequest,
+    tenant_id: uuid.UUID,
+    bot_profile: BotProfile,
+    chat_session: Chat,
+    history: list[dict],
+    api_key: str | None,
+    session,
+) -> AsyncGenerator[str, None]:
+    """Async generator that yields SSE-formatted events from the orchestrator."""
+    result: ChatResponse | None = None
+    try:
+        async for item in run_chat_turn_stream(
+            user_message=body.message,
+            bot_profile=bot_profile,
+            tenant_id=str(tenant_id),
+            history=history,
+            api_key=api_key,
+        ):
+            if isinstance(item, StreamEvent):
+                yield _format_sse(item.event, item.data)
+            elif isinstance(item, ChatResponse):
+                # Final item — accumulated result for persistence
+                result = item
+
+        # Persist after successful stream completion
+        if result:
+            assistant_msg = await _persist_assistant_message(
+                session=session,
+                tenant_id=tenant_id,
+                chat_session=chat_session,
+                bot_profile=bot_profile,
+                result=result,
+                is_stream=True,
+            )
+            # Send done event with IDs (after persistence so message_id is real)
+            yield _format_sse("done", {
+                "chat_id": str(chat_session.id),
+                "message_id": str(assistant_msg.id),
+                "usage": {
+                    "model": result.model,
+                    "prompt_tokens": result.prompt_tokens,
+                    "completion_tokens": result.completion_tokens,
+                    "total_tokens": result.total_tokens,
+                },
+            })
+
+    except Exception:
+        logger.exception("Error during streaming chat")
+        yield _format_sse("error", {"detail": "An error occurred during generation."})
+
+
+# ── Persistence helper ────────────────────────────────────────
+
+async def _persist_assistant_message(
+    session,
+    tenant_id: uuid.UUID,
+    chat_session: Chat,
+    bot_profile: BotProfile,
+    result: ChatResponse,
+    is_stream: bool,
+) -> Message:
+    """Save the assistant message, usage event, and update chat counters."""
+    chunk_ids = [c.chunk_id for c in result.retrieved_chunks]
+    assistant_msg = Message(
+        tenant_id=tenant_id,
+        chat_id=chat_session.id,
+        role=MessageRole.ASSISTANT,
+        content=result.content,
+        prompt_tokens=result.prompt_tokens,
+        completion_tokens=result.completion_tokens,
+        context_chunks=json.dumps(chunk_ids),
+    )
+    session.add(assistant_msg)
+    await session.flush()
+
+    usage_event = UsageEvent(
+        tenant_id=tenant_id,
+        chat_id=chat_session.id,
+        message_id=assistant_msg.id,
+        bot_profile_id=bot_profile.id,
+        model=result.model,
+        prompt_tokens=result.prompt_tokens,
+        completion_tokens=result.completion_tokens,
+        total_tokens=result.total_tokens,
+        is_stream=is_stream,
+        time_to_first_token_ms=result.time_to_first_token_ms,
+        stream_duration_ms=result.stream_duration_ms,
+    )
+    session.add(usage_event)
+
+    chat_session.message_count += 2  # user + assistant
+    chat_session.total_prompt_tokens += result.prompt_tokens
+    chat_session.total_completion_tokens += result.completion_tokens
+    session.add(chat_session)
+
+    await session.commit()
+    await session.refresh(assistant_msg)
+    return assistant_msg
 
 
 # ── Chat history endpoint ────────────────────────────────────
