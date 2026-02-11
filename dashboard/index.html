@@ -922,13 +922,64 @@
 
         <!-- ── Settings ───────────────────────────────────── -->
         <div x-show="page === 'settings'" x-data="settingsPage()" x-init="load()">
-          <h2 class="text-2xl font-bold mb-6">Settings</h2>
+          <div class="flex items-center justify-between mb-6">
+            <h2 class="text-2xl font-bold">Settings & Health</h2>
+            <button @click="loadDetailed()" class="btn-secondary btn-sm" :disabled="detailLoading">
+              <span x-show="!detailLoading">Refresh</span>
+              <span x-show="detailLoading" class="flex items-center gap-2"><span class="spinner"></span> Loading...</span>
+            </button>
+          </div>
 
           <div class="space-y-6">
+
+            <!-- Overall Status Banner -->
+            <div class="glass-card-static p-5" x-show="detail">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <span :class="detail?.status === 'ok' ? 'bg-emerald-500' : 'bg-amber-500'"
+                        :style="detail?.status === 'ok' ? 'box-shadow: 0 0 12px rgba(16,185,129,0.5)' : 'box-shadow: 0 0 12px rgba(245,158,11,0.5)'"
+                        class="w-3 h-3 rounded-full"></span>
+                  <span class="font-semibold text-white" x-text="detail?.status === 'ok' ? 'All Systems Operational' : 'System Degraded'"></span>
+                </div>
+                <div class="text-xs" style="color: rgba(255,255,255,0.35);">
+                  Uptime: <span x-text="formatUptime(detail?.uptime_seconds)"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Service Health Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4" x-show="detail">
+              <template x-for="[svc, info] in [['PostgreSQL', detail?.postgres], ['Qdrant', detail?.qdrant], ['Redis', detail?.redis]]" :key="svc">
+                <div class="glass-card-static p-5">
+                  <div class="flex items-center justify-between mb-3">
+                    <span class="font-semibold text-white text-sm" x-text="svc"></span>
+                    <span :class="info?.status === 'ok' ? 'bg-emerald-500' : 'bg-rose-500'"
+                          :style="info?.status === 'ok' ? 'box-shadow: 0 0 8px rgba(16,185,129,0.5)' : 'box-shadow: 0 0 8px rgba(244,63,94,0.5)'"
+                          class="w-2.5 h-2.5 rounded-full"></span>
+                  </div>
+                  <div class="space-y-1.5 text-xs">
+                    <div class="flex justify-between" style="color: rgba(255,255,255,0.5);">
+                      <span>Status</span>
+                      <span class="font-medium" :style="info?.status === 'ok' ? 'color: #34d399;' : 'color: #fb7185;'"
+                            x-text="info?.status === 'ok' ? 'Connected' : info?.detail || 'Error'"></span>
+                    </div>
+                    <div class="flex justify-between" style="color: rgba(255,255,255,0.5);" x-show="info?.version">
+                      <span>Version</span>
+                      <span class="text-white" x-text="info?.version || '—'"></span>
+                    </div>
+                    <div class="flex justify-between" style="color: rgba(255,255,255,0.5);" x-show="info?.latency_ms != null">
+                      <span>Latency</span>
+                      <span class="text-white" x-text="(info?.latency_ms || 0) + ' ms'"></span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+
             <!-- Tenant info -->
             <div class="glass-card-static p-6">
               <h3 class="font-semibold mb-4">Tenant Information</h3>
-              <dl class="grid grid-cols-2 gap-4 text-sm">
+              <dl class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div><dt style="color: rgba(255,255,255,0.45);">Name</dt><dd class="font-medium mt-1" x-text="$store.auth.tenant?.name"></dd></div>
                 <div><dt style="color: rgba(255,255,255,0.45);">Slug</dt><dd class="font-medium mt-1" x-text="$store.auth.tenant?.slug"></dd></div>
                 <div><dt style="color: rgba(255,255,255,0.45);">Plan</dt><dd class="font-medium mt-1" x-text="$store.auth.tenant?.plan"></dd></div>
@@ -939,33 +990,200 @@
               </dl>
             </div>
 
-            <!-- System health -->
-            <div class="glass-card-static p-6">
-              <div class="flex items-center justify-between mb-4">
-                <h3 class="font-semibold">System Health</h3>
-                <button @click="checkHealth()" class="btn-secondary btn-sm">Refresh</button>
+            <!-- Bot Source Breakdown -->
+            <div class="glass-card-static p-6" x-show="detail?.bot_sources?.length > 0">
+              <h3 class="font-semibold mb-4">Bot Source Breakdown</h3>
+              <div class="glass-table-wrap">
+                <table class="data-table">
+                  <thead><tr>
+                    <th>Bot</th><th>Model</th><th>Status</th><th>Sources</th><th>Ready</th><th>Chunks</th>
+                  </tr></thead>
+                  <tbody>
+                    <template x-for="bot in detail?.bot_sources || []" :key="bot.bot_profile_id">
+                      <tr>
+                        <td class="font-medium text-white" x-text="bot.bot_name"></td>
+                        <td class="text-xs" style="color: rgba(255,255,255,0.5);" x-text="bot.model"></td>
+                        <td>
+                          <span :class="bot.is_active ? 'badge-ready' : 'badge-error'"
+                                class="badge" x-text="bot.is_active ? 'Active' : 'Inactive'"></span>
+                        </td>
+                        <td x-text="bot.source_count"></td>
+                        <td>
+                          <span :style="bot.ready_sources === bot.source_count && bot.source_count > 0 ? 'color: #34d399;' : 'color: rgba(255,255,255,0.65);'"
+                                x-text="bot.ready_sources + '/' + bot.source_count"></span>
+                        </td>
+                        <td x-text="bot.total_chunks.toLocaleString()"></td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
               </div>
-              <div class="space-y-3" x-show="health">
-                <template x-for="[svc, info] in Object.entries(health || {})" :key="svc">
-                  <div x-show="svc !== 'status'" class="flex items-center justify-between py-2" style="border-bottom: 1px solid rgba(255,255,255,0.06);">
-                    <span class="capitalize font-medium text-sm" x-text="svc"></span>
-                    <div class="flex items-center gap-2">
-                      <span :class="info.status === 'ok' ? 'bg-emerald-500' : 'bg-rose-500'"
-                            :style="info.status === 'ok' ? 'box-shadow: 0 0 8px rgba(16,185,129,0.5)' : 'box-shadow: 0 0 8px rgba(244,63,94,0.5)'"
-                            class="w-2.5 h-2.5 rounded-full"></span>
-                      <span class="text-sm" style="color: rgba(255,255,255,0.65);" x-text="info.status === 'ok' ? 'Connected' : info.detail || 'Error'"></span>
-                    </div>
+              <p class="text-xs mt-3" style="color: rgba(255,255,255,0.3);">
+                Each bot only retrieves chunks from its own sources during RAG. Sources are isolated by bot_profile_id.
+              </p>
+            </div>
+
+            <!-- Database Statistics -->
+            <div class="glass-card-static p-6" x-show="detail?.db_stats && !detail?.db_stats?.error">
+              <h3 class="font-semibold mb-4">Database Statistics</h3>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="stat-card p-4">
+                  <div class="text-xs" style="color: rgba(255,255,255,0.45);">Total Chunks</div>
+                  <div class="text-xl font-bold mt-1" x-text="(detail?.db_stats?.total_chunks ?? 0).toLocaleString()"></div>
+                </div>
+                <div class="stat-card p-4">
+                  <div class="text-xs" style="color: rgba(255,255,255,0.45);">Total Messages</div>
+                  <div class="text-xl font-bold mt-1" x-text="(detail?.db_stats?.total_messages ?? 0).toLocaleString()"></div>
+                </div>
+                <div class="stat-card p-4">
+                  <div class="text-xs" style="color: rgba(255,255,255,0.45);">Total Chats</div>
+                  <div class="text-xl font-bold mt-1" x-text="(detail?.db_stats?.total_chats ?? 0).toLocaleString()"></div>
+                </div>
+                <div class="stat-card p-4">
+                  <div class="text-xs" style="color: rgba(255,255,255,0.45);">LLM Requests</div>
+                  <div class="text-xl font-bold mt-1" x-text="(detail?.db_stats?.total_usage_events ?? 0).toLocaleString()"></div>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+                <div class="stat-card p-4">
+                  <div class="text-xs" style="color: rgba(255,255,255,0.45);">Prompt Tokens</div>
+                  <div class="text-lg font-bold mt-1" x-text="(detail?.db_stats?.total_prompt_tokens ?? 0).toLocaleString()"></div>
+                </div>
+                <div class="stat-card p-4">
+                  <div class="text-xs" style="color: rgba(255,255,255,0.45);">Completion Tokens</div>
+                  <div class="text-lg font-bold mt-1" x-text="(detail?.db_stats?.total_completion_tokens ?? 0).toLocaleString()"></div>
+                </div>
+                <div class="stat-card p-4">
+                  <div class="text-xs" style="color: rgba(255,255,255,0.45);">Sources by Status</div>
+                  <div class="mt-2 space-y-1">
+                    <template x-for="[status, count] in Object.entries(detail?.db_stats?.sources_by_status || {})" :key="status">
+                      <div class="flex items-center justify-between text-xs">
+                        <span :class="'badge badge-' + status" x-text="status"></span>
+                        <span class="text-white font-medium" x-text="count"></span>
+                      </div>
+                    </template>
+                    <div x-show="Object.keys(detail?.db_stats?.sources_by_status || {}).length === 0"
+                         class="text-xs" style="color: rgba(255,255,255,0.3);">No sources</div>
                   </div>
-                </template>
+                </div>
               </div>
+            </div>
+
+            <!-- Qdrant Statistics -->
+            <div class="glass-card-static p-6" x-show="detail?.qdrant_stats && !detail?.qdrant_stats?.error">
+              <h3 class="font-semibold mb-4">Vector Store (Qdrant)</h3>
+              <dl class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <dt style="color: rgba(255,255,255,0.45);">Collection</dt>
+                  <dd class="font-medium mt-1"><code class="code-inline" x-text="detail?.qdrant_stats?.collection"></code></dd>
+                </div>
+                <div>
+                  <dt style="color: rgba(255,255,255,0.45);">Vectors</dt>
+                  <dd class="font-medium mt-1" x-text="(detail?.qdrant_stats?.vectors_count ?? 0).toLocaleString()"></dd>
+                </div>
+                <div>
+                  <dt style="color: rgba(255,255,255,0.45);">Points</dt>
+                  <dd class="font-medium mt-1" x-text="(detail?.qdrant_stats?.points_count ?? 0).toLocaleString()"></dd>
+                </div>
+                <div>
+                  <dt style="color: rgba(255,255,255,0.45);">Segments</dt>
+                  <dd class="font-medium mt-1" x-text="detail?.qdrant_stats?.segments_count ?? '—'"></dd>
+                </div>
+                <div>
+                  <dt style="color: rgba(255,255,255,0.45);">Disk Usage</dt>
+                  <dd class="font-medium mt-1" x-text="(detail?.qdrant_stats?.disk_data_size_mb ?? 0) + ' MB'"></dd>
+                </div>
+                <div>
+                  <dt style="color: rgba(255,255,255,0.45);">RAM Usage</dt>
+                  <dd class="font-medium mt-1" x-text="(detail?.qdrant_stats?.ram_data_size_mb ?? 0) + ' MB'"></dd>
+                </div>
+              </dl>
+            </div>
+
+            <!-- Redis Statistics -->
+            <div class="glass-card-static p-6" x-show="detail?.redis_stats && !detail?.redis_stats?.error">
+              <h3 class="font-semibold mb-4">Cache & Queue (Redis)</h3>
+              <dl class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <dt style="color: rgba(255,255,255,0.45);">Memory Used</dt>
+                  <dd class="font-medium mt-1" x-text="detail?.redis_stats?.used_memory_human ?? '—'"></dd>
+                </div>
+                <div>
+                  <dt style="color: rgba(255,255,255,0.45);">Peak Memory</dt>
+                  <dd class="font-medium mt-1" x-text="detail?.redis_stats?.used_memory_peak_human ?? '—'"></dd>
+                </div>
+                <div>
+                  <dt style="color: rgba(255,255,255,0.45);">Connected Clients</dt>
+                  <dd class="font-medium mt-1" x-text="detail?.redis_stats?.connected_clients ?? '—'"></dd>
+                </div>
+                <div>
+                  <dt style="color: rgba(255,255,255,0.45);">Redis Uptime</dt>
+                  <dd class="font-medium mt-1" x-text="formatUptime(detail?.redis_stats?.uptime_seconds)"></dd>
+                </div>
+                <div>
+                  <dt style="color: rgba(255,255,255,0.45);">DB Keys</dt>
+                  <dd class="font-medium mt-1" x-text="(detail?.redis_stats?.db_keys ?? 0).toLocaleString()"></dd>
+                </div>
+              </dl>
+            </div>
+
+            <!-- Configuration -->
+            <div class="glass-card-static p-6" x-show="detail?.config">
+              <h3 class="font-semibold mb-4">Configuration</h3>
+              <dl class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <dt style="color: rgba(255,255,255,0.45);">Database URL</dt>
+                  <dd class="font-medium mt-1"><code class="code-inline text-xs" x-text="detail?.config?.database_url"></code></dd>
+                </div>
+                <div>
+                  <dt style="color: rgba(255,255,255,0.45);">Redis URL</dt>
+                  <dd class="font-medium mt-1"><code class="code-inline text-xs" x-text="detail?.config?.redis_url"></code></dd>
+                </div>
+                <div>
+                  <dt style="color: rgba(255,255,255,0.45);">Qdrant URL</dt>
+                  <dd class="font-medium mt-1"><code class="code-inline text-xs" x-text="detail?.config?.qdrant_url"></code></dd>
+                </div>
+                <div>
+                  <dt style="color: rgba(255,255,255,0.45);">Default LLM</dt>
+                  <dd class="font-medium mt-1" x-text="detail?.config?.default_llm_model"></dd>
+                </div>
+                <div>
+                  <dt style="color: rgba(255,255,255,0.45);">Embedding Model</dt>
+                  <dd class="font-medium mt-1" x-text="detail?.config?.default_embedding_model"></dd>
+                </div>
+                <div>
+                  <dt style="color: rgba(255,255,255,0.45);">JWT Expiry</dt>
+                  <dd class="font-medium mt-1" x-text="(detail?.config?.jwt_expire_minutes ?? 0) + ' min'"></dd>
+                </div>
+                <div>
+                  <dt style="color: rgba(255,255,255,0.45);">Encryption</dt>
+                  <dd class="mt-1">
+                    <span :class="detail?.config?.encryption_configured ? 'badge-ready' : 'badge-error'"
+                          class="badge" x-text="detail?.config?.encryption_configured ? 'Configured' : 'Not Set'"></span>
+                  </dd>
+                </div>
+                <div>
+                  <dt style="color: rgba(255,255,255,0.45);">JWT Secret</dt>
+                  <dd class="mt-1">
+                    <span :class="detail?.config?.jwt_configured ? 'badge-ready' : 'badge-error'"
+                          class="badge" x-text="detail?.config?.jwt_configured ? 'Configured' : 'Not Set'"></span>
+                  </dd>
+                </div>
+                <div>
+                  <dt style="color: rgba(255,255,255,0.45);">CORS Origins</dt>
+                  <dd class="font-medium mt-1" x-text="detail?.config?.cors_origins"></dd>
+                </div>
+              </dl>
             </div>
 
             <!-- App info -->
             <div class="glass-card-static p-6">
               <h3 class="font-semibold mb-4">Application</h3>
-              <dl class="grid grid-cols-2 gap-4 text-sm">
+              <dl class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div><dt style="color: rgba(255,255,255,0.45);">Version</dt><dd class="font-medium mt-1">0.1.0</dd></div>
-                <div><dt style="color: rgba(255,255,255,0.45);">API Docs</dt><dd class="mt-1"><a href="/docs" target="_blank" class="hover:underline">/docs</a></dd></div>
+                <div><dt style="color: rgba(255,255,255,0.45);">Python</dt><dd class="font-medium mt-1" x-text="detail?.python_version || '—'"></dd></div>
+                <div><dt style="color: rgba(255,255,255,0.45);">Platform</dt><dd class="font-medium mt-1 text-xs" x-text="detail?.platform || '—'"></dd></div>
+                <div><dt style="color: rgba(255,255,255,0.45);">API Docs</dt><dd class="mt-1"><a href="/docs" target="_blank" class="hover:underline" style="color: #a78bfa;">/docs</a></dd></div>
               </dl>
             </div>
           </div>
@@ -1741,13 +1959,39 @@
     function settingsPage() {
       return {
         health: null,
+        detail: null,
+        detailLoading: false,
 
         async load() {
-          await this.checkHealth();
+          await this.loadDetailed();
         },
 
-        async checkHealth() {
-          try { this.health = await API.getSystemHealth(); } catch (e) { Alpine.store('toast').error(e.message); }
+        async loadDetailed() {
+          this.detailLoading = true;
+          try {
+            this.detail = await API.getDetailedHealth();
+            this.health = {
+              postgres: this.detail.postgres,
+              qdrant: this.detail.qdrant,
+              redis: this.detail.redis,
+              status: this.detail.status,
+            };
+          } catch (e) {
+            // Fallback to basic health if detailed fails (e.g. non-admin)
+            try { this.health = await API.getSystemHealth(); } catch {}
+            Alpine.store('toast').error(e.message);
+          }
+          this.detailLoading = false;
+        },
+
+        formatUptime(seconds) {
+          if (!seconds && seconds !== 0) return '—';
+          const d = Math.floor(seconds / 86400);
+          const h = Math.floor((seconds % 86400) / 3600);
+          const m = Math.floor((seconds % 3600) / 60);
+          if (d > 0) return `${d}d ${h}h ${m}m`;
+          if (h > 0) return `${h}h ${m}m`;
+          return `${m}m`;
         },
       };
     }

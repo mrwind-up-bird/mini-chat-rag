@@ -297,4 +297,7 @@ const API = {
   getSystemHealth() {
     return this.get('/v1/system/health');
   },
+  getDetailedHealth() {
+    return this.get('/v1/system/health/detailed');
+  },
 };
