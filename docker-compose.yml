@@ -57,9 +57,9 @@ services:
       - proxy-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.minirag.rule=Host(`mini-rag.de`, `www.mini-rag.de`)"
+      - "traefik.http.routers.minirag.rule=Host(`mini-rag.de`) || Host(`www.mini-rag.de`)"
       - "traefik.http.routers.minirag.entrypoints=websecure"
-      - "traefik.http.routers.minirag.tls.certresolver=myresolver"
+      - "traefik.http.routers.minirag.tls.certresolver=httpresolver"
       - "traefik.http.routers.minirag.tls.domains[0].main=mini-rag.de"
       - "traefik.http.routers.minirag.tls.domains[0].sans=www.mini-rag.de"
       - "traefik.http.services.minirag.loadbalancer.server.port=8000"
