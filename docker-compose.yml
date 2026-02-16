@@ -1,84 +1,89 @@
 services:
-  # ── PostgreSQL (metadata store) ───────────────────────────
+  # ── PostgreSQL overrides ──────────────────────────────────
   postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
+    ports: !override []
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-minirag}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
       POSTGRES_DB: ${POSTGRES_DB:-minirag}
-    ports:
-      - "5432:5432"
-    volumes:
-      - .data/postgres:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-minirag}"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # ── Qdrant (vector store) ─────────────────────────────────
+  # ── Qdrant overrides ─────────────────────────────────────
   qdrant:
-    image: qdrant/qdrant:v1.13.2
-    restart: unless-stopped
-    ports:
-      - "6333:6333"   # REST
-      - "6334:6334"   # gRPC
-    volumes:
-      - .data/qdrant:/qdrant/storage
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/6333' || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
+    ports: !override []
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # ── Redis (task queue broker) ─────────────────────────────
+  # ── Redis overrides ──────────────────────────────────────
   redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    volumes:
-      - .data/redis:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
+    ports: !override []
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # ── FastAPI web service ───────────────────────────────────
+  # ── Web service overrides (HIER SIND DIE TRAEFIK LABELS) ─
   web:
-    build:
-      context: .
-      target: web
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    env_file: .env
-    depends_on:
-      postgres:
-        condition: service_healthy
-      qdrant:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./app:/app/app  # hot-reload in dev
-      - ./dashboard:/app/dashboard  # dashboard hot-reload
+    ports: !override []
+    volumes: !override []
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - default
+      - proxy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.minirag.rule=Host(`mini-rag.de`, `www.mini-rag.de`)"
+      - "traefik.http.routers.minirag.entrypoints=websecure"
+      - "traefik.http.routers.minirag.tls.certresolver=myresolver"
+      # Zertifikat für die Hauptdomain und www anfordern
+      - "traefik.http.routers.minirag.tls.domains[0].main=mini-rag.de"
+      - "traefik.http.routers.minirag.tls.domains[0].sans=www.mini-rag.de"
+      # WICHTIG: Falls dein mini-rag intern auf einem anderen Port als 80 läuft (z.B. 3000), musst du diese Zahl ändern:
+      - "traefik.http.services.minirag.loadbalancer.server.port=80"
 
-  # ── ARQ worker service ────────────────────────────────────
+  # ── Worker overrides ─────────────────────────────────────
   worker:
-    build:
-      context: .
-      target: worker
-    restart: unless-stopped
-    env_file: .env
-    depends_on:
-      postgres:
-        condition: service_healthy
-      qdrant:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./app:/app/app
+    volumes: !override []
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ✅ NEU: Proxy-Netzwerk deklarieren
+networks:
+  proxy-network:
+    external: true
