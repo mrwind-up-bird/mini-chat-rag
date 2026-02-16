@@ -1,5 +1,4 @@
 services:
-  # ── PostgreSQL overrides ──────────────────────────────────
   postgres:
     ports: !override []
     environment:
@@ -17,7 +16,6 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ── Qdrant overrides ─────────────────────────────────────
   qdrant:
     ports: !override []
     deploy:
@@ -30,7 +28,6 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ── Redis overrides ──────────────────────────────────────
   redis:
     ports: !override []
     deploy:
@@ -43,7 +40,6 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ── Web service overrides (HIER SIND DIE TRAEFIK LABELS) ─
   web:
     ports: !override []
     volumes: !override []
@@ -64,13 +60,10 @@ services:
       - "traefik.http.routers.minirag.rule=Host(`mini-rag.de`, `www.mini-rag.de`)"
       - "traefik.http.routers.minirag.entrypoints=websecure"
       - "traefik.http.routers.minirag.tls.certresolver=myresolver"
-      # Zertifikat für die Hauptdomain und www anfordern
       - "traefik.http.routers.minirag.tls.domains[0].main=mini-rag.de"
       - "traefik.http.routers.minirag.tls.domains[0].sans=www.mini-rag.de"
-      # WICHTIG: Falls dein mini-rag intern auf einem anderen Port als 80 läuft (z.B. 3000), musst du diese Zahl ändern:
-      - "traefik.http.services.minirag.loadbalancer.server.port=80"
+      - "traefik.http.services.minirag.loadbalancer.server.port=8000"
 
-  # ── Worker overrides ─────────────────────────────────────
   worker:
     volumes: !override []
     deploy:
@@ -83,7 +76,6 @@ services:
         max-size: "10m"
         max-file: "3"
 
-# ✅ NEU: Proxy-Netzwerk deklarieren
 networks:
   proxy-network:
     external: true
