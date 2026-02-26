@@ -92,15 +92,10 @@ async def system_health_detailed(auth: Auth, session: Session) -> DetailedHealth
     pg = await _check_postgres(session)
     qd = await _check_qdrant()
     rd = await _check_redis()
-
-    overall = "ok" if all(s.status == "ok" for s in (pg, qd, rd)) else "degraded"
-
     db_stats = await _get_db_stats(session, auth.tenant_id)
     qdrant_stats = await _get_qdrant_stats()
-    redis_stats = await _get_redis_stats()
     bot_sources = await _get_bot_sources(session, auth.tenant_id)
 
-    return DetailedHealthResponse(
         status=overall,
         uptime_seconds=int(time.time() - _start_time),
         python_version=sys.version.split()[0],
