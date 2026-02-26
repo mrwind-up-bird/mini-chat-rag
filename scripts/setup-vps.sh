@@ -23,7 +23,12 @@ ufw default deny incoming
 ufw default allow outgoing
 ufw allow 22/tcp   # SSH
 ufw allow 80/tcp   # HTTP
-ufw allow 443/tcp  # HTTPS
+FERNET_KEY=$(docker run --rm python:3.11-slim python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null || {
+    echo "ERROR: Failed to generate Fernet key using Docker. Please install Docker properly or generate the key manually." >&2
+    echo "To generate manually, run: python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'" >&2
+    echo "Then set ENCRYPTION_KEY in /opt/minirag/.env" >&2
+    exit 1
+})
 ufw --force enable
 
 echo "==> Creating minirag user and project directory..."
