@@ -16,6 +16,8 @@ revision: str = 'c8b5dd2aff5e'
 down_revision: str | Sequence[str] | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
+    op.create_index("ix_sources_refresh_schedule", "sources", ["refresh_schedule"])
+    op.create_index("ix_sources_last_refreshed_at", "sources", ["last_refreshed_at"])
 
 
 def upgrade() -> None:
@@ -23,6 +25,8 @@ def upgrade() -> None:
     op.add_column("sources", sa.Column("last_refreshed_at", sa.DateTime(), nullable=True))
 
 
+    op.drop_index("ix_sources_last_refreshed_at", "sources")
+    op.drop_index("ix_sources_refresh_schedule", "sources")
 def downgrade() -> None:
     op.drop_column("sources", "last_refreshed_at")
     op.drop_column("sources", "refresh_schedule")
