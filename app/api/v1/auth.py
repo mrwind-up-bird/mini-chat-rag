@@ -1,3 +1,4 @@
+import secrets
 """Authentication endpoints — login + current user."""
 
 from fastapi import APIRouter, HTTPException, status
@@ -39,7 +40,15 @@ async def login(body: LoginRequest, session: Session) -> LoginResponse:
     stmt = select(User).where(User.email == body.email)
     result = await session.execute(stmt)
     user = result.scalar_one_or_none()
-
+    # Use constant-time comparison to prevent timing attacks
+    if user is None:
+        # Perform dummy password verification to maintain constant timing
+        verify_password(body.password, "$2b$12$dummy.hash.to.prevent.timing.attacks.on.user.enumeration")
+        is_valid = False
+    else:
+        is_valid = verify_password(body.password, user.password_hash)
+    
+    if not is_valid:
     if user is None or not verify_password(body.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
