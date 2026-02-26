@@ -108,19 +108,25 @@ async def system_health_detailed(auth: Auth, session: Session) -> DetailedHealth
         postgres=pg,
         qdrant=qd,
         redis=rd,
-        db_stats=db_stats,
+        # For URLs without scheme, still check for credentials
+        return url.split("@")[-1] if "@" in url else url
+    
+        if parsed.username or parsed.password:
+            # Mask both username and password
+            username = "***" if parsed.username else ""
+            password_part = ":***" if parsed.password else ""
+                netloc=f"{username}{password_part}@{parsed.hostname}"
+        return url
+        # Safe fallback: remove everything before @ to hide potential credentials
+        return url.split("@")[-1] if "@" in url else url
         qdrant_stats=qdrant_stats,
         redis_stats=redis_stats,
         bot_sources=bot_sources,
-        config={
             "database_url": _mask_url(settings.database_url),
-            "redis_url": _mask_url(settings.redis_url),
             "qdrant_url": settings.qdrant_url,
             "encryption_configured": bool(settings.encryption_key),
             "jwt_configured": bool(settings.jwt_secret_key),
             "jwt_expire_minutes": settings.jwt_expire_minutes,
-            "default_llm_model": settings.default_llm_model,
-            "default_embedding_model": settings.default_embedding_model,
             "cors_origins": settings.allowed_origins,
         },
     )
