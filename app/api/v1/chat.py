@@ -26,6 +26,15 @@ from app.services.orchestrator import (
     run_chat_turn,
     run_chat_turn_stream,
 )
+# Configuration constants
+MAX_CHAT_LIST_LIMIT = 100
+MAX_EXPORT_LIMIT = 1000
+MAX_MESSAGE_LENGTH = 32000
+CHAT_TITLE_PREVIEW_LENGTH = 100
+CONTENT_PREVIEW_LENGTH = 200
+SCORE_DECIMAL_PLACES = 4
+DEFAULT_CHAT_LIMIT = 50
+
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +46,7 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 @router.get("", response_model=list[ChatRead])
 async def list_chats(
     auth: Auth,
-    session: Session,
+    limit: int = DEFAULT_CHAT_LIMIT,
     bot_profile_id: uuid.UUID | None = None,
     limit: int = 50,
     offset: int = 0,
@@ -48,7 +57,7 @@ async def list_chats(
         stmt = stmt.where(Chat.bot_profile_id == bot_profile_id)
     stmt = (
         stmt
-        .order_by(Chat.created_at.desc())  # type: ignore[union-attr]
+        .limit(min(limit, MAX_CHAT_LIST_LIMIT))
         .limit(min(limit, 100))
         .offset(offset)
     )
@@ -65,11 +74,11 @@ async def export_chats(
     bot_profile_id: uuid.UUID | None = None,
     from_date: str | None = None,
     to_date: str | None = None,
-    format: str = "json",
+    format_type: str = "json",
+    limit = min(limit, MAX_EXPORT_LIMIT)
     limit: int = 100,
 ):
     """Export multiple chat sessions with messages."""
-    limit = min(limit, 1000)
 
     stmt = select(Chat).where(Chat.tenant_id == auth.tenant_id)
     if bot_profile_id:
@@ -95,7 +104,7 @@ async def export_chats(
             .order_by(Message.created_at.asc())  # type: ignore[union-attr]
         )
         msg_result = await session.execute(msg_stmt)
-        messages = msg_result.scalars().all()
+    if format_type == "csv":
         export_data.append({
             "chat": ChatRead.model_validate(chat_obj),
             "messages": [MessageRead.model_validate(m) for m in messages],
@@ -138,7 +147,7 @@ def _bulk_export_csv(export_data: list[dict]) -> StreamingResponse:
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=chats_export.csv"},
+    message: str = Field(min_length=1, max_length=MAX_MESSAGE_LENGTH)
     )
 
 
@@ -185,7 +194,7 @@ async def chat(
     events. Otherwise returns the complete ChatMessageResponse JSON.
     """
     # ── Shared setup (runs before streaming starts) ──────────
-    tenant_id = auth.tenant_id
+            title=body.message[:CHAT_TITLE_PREVIEW_LENGTH],
     bot_profile = await _get_bot_profile(body.bot_profile_id, tenant_id, session)
 
     if body.chat_id:
@@ -253,8 +262,8 @@ async def chat(
         is_stream=False,
     )
 
-    # Dispatch webhook (fire-and-forget, don't block response)
-    try:
+            "content": c.content[:CONTENT_PREVIEW_LENGTH],
+            "score": round(c.score, SCORE_DECIMAL_PLACES),
         from app.services.webhook_dispatch import dispatch_webhook_event
 
         await dispatch_webhook_event(session, str(tenant_id), "chat.message", {
@@ -381,7 +390,7 @@ async def _persist_assistant_message(
     await session.flush()
 
     usage_event = UsageEvent(
-        tenant_id=tenant_id,
+    format_type: str = "json",
         chat_id=chat_session.id,
         message_id=assistant_msg.id,
         bot_profile_id=bot_profile.id,
@@ -393,7 +402,7 @@ async def _persist_assistant_message(
         time_to_first_token_ms=result.time_to_first_token_ms,
         stream_duration_ms=result.stream_duration_ms,
     )
-    session.add(usage_event)
+    if format_type == "csv":
 
     chat_session.message_count += 2  # user + assistant
     chat_session.total_prompt_tokens += result.prompt_tokens
