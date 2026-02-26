@@ -40,7 +40,8 @@ fi
 echo "==> Generating secrets and creating .env..."
 FERNET_KEY=$(docker run --rm python:3.11-slim python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null || echo "GENERATE_ME")
 JWT_SECRET=$(openssl rand -hex 32)
-PG_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/')
+# Create .env with secure permissions from the start
+(umask 077 && cat > /opt/minirag/.env) <<EOF
 
 cat > /opt/minirag/.env <<EOF
 # ── Domain ────────────────────────────────────────────────
@@ -70,7 +71,6 @@ ALLOWED_ORIGINS=*
 # ── LLM ───────────────────────────────────────────────────
 DEFAULT_LLM_MODEL=gpt-4o-mini
 # OPENAI_API_KEY=
-# ANTHROPIC_API_KEY=
 EOF
 
 chmod 600 /opt/minirag/.env
