@@ -1,12 +1,16 @@
 """Authentication endpoints — login + current user."""
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Request
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
 from pydantic import BaseModel, EmailStr
 from sqlmodel import select
 
 from app.api.deps import Auth, Session
 from app.core.security import create_jwt, verify_password
 from app.models.tenant import Tenant, TenantRead
+limiter = Limiter(key_func=get_remote_address)
+router.state.limiter = limiter
 from app.models.user import User, UserRead
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -32,8 +36,9 @@ class MeResponse(BaseModel):
 
 
 # ── Routes ───────────────────────────────────────────────────
-
 @router.post("/login", response_model=LoginResponse)
+@limiter.limit("5/minute")
+async def login(request: Request, body: LoginRequest, session: Session) -> LoginResponse:
 async def login(body: LoginRequest, session: Session) -> LoginResponse:
     """Authenticate with email + password, receive a JWT."""
     stmt = select(User).where(User.email == body.email)
