@@ -1,3 +1,4 @@
+from collections import defaultdict
 """Source CRUD — all queries scoped to tenant_id."""
 
 import json
@@ -247,10 +248,32 @@ async def create_batch_source(
     )
 
 
-@router.post("", response_model=SourceRead, status_code=status.HTTP_201_CREATED)
-async def create_source(
-    body: SourceCreate,
-    auth: Auth,
+        # Fetch all children in a single query to avoid N+1 problem
+        source_ids = [src.id for src in sources]
+        if source_ids:
+            children_stmt = (
+                select(Source)
+                .where(
+                    Source.parent_id.in_(source_ids),
+                    Source.tenant_id == auth.tenant_id,
+                    Source.is_active == True,  # noqa: E712
+                )
+                .order_by(Source.created_at.asc())
+            )
+            children_result = await session.execute(children_stmt)
+            all_children = list(children_result.scalars().all())
+            
+            # Group children by parent_id
+            children_by_parent = defaultdict(list)
+            for child in all_children:
+                children_by_parent[child.parent_id].append(child)
+        else:
+            children_by_parent = defaultdict(list)
+        
+        reads = []
+        for src in sources:
+            children = children_by_parent[src.id]
+            if children:
     session: Session,
 ) -> SourceRead:
     # Verify bot_profile belongs to the same tenant
