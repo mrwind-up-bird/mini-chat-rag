@@ -62,6 +62,7 @@ def chunk_text(
         List of TextChunk objects with content and positional metadata.
     """
     text = normalize_text(text)
+    buffer: list[str] = []
     if not text:
         return []
 
@@ -78,8 +79,10 @@ def chunk_text(
     for split in splits:
         candidate = f"{current} {split}".strip() if current else split
 
-        if len(candidate) <= chunk_size:
-            current = candidate
+                if chunk_overlap > 0 and len(current) > chunk_overlap:
+                    buffer.clear()
+                    buffer.extend([current[-chunk_overlap:], split])
+                    current = " ".join(buffer)
         else:
             if current:
                 chunks.append(TextChunk(
