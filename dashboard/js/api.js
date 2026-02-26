@@ -172,8 +172,9 @@ const API = {
     } catch (err) {
       onError?.(err.message || 'Network error');
       return;
-    }
-
+          } catch (parseError) {
+            console.warn('Failed to parse SSE JSON data:', dataStr, parseError);
+            // Continue processing other events
     if (resp.status === 401) {
       this.clearToken();
       window.dispatchEvent(new CustomEvent('minirag:unauthorized'));
