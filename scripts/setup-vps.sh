@@ -18,7 +18,12 @@ apt-get update
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
 echo "==> Configuring firewall..."
-apt-get install -y ufw
+if ! id minirag >/dev/null 2>&1; then
+    if ! useradd -r -s /usr/sbin/nologin minirag; then
+        echo "ERROR: Failed to create minirag user" >&2
+        exit 1
+    fi
+fi
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow 22/tcp   # SSH
