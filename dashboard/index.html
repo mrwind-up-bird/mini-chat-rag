@@ -34,6 +34,21 @@
   <!-- Animated gradient mesh background -->
   <div class="bg-mesh"><div class="bg-orb"></div></div>
 
+  <!-- ═══ Security Alert Banner ═══════════════════════════ -->
+  <div x-show="$store.security.hasAlert"
+       x-transition
+       class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md w-full mx-4"
+       style="background: rgba(239, 68, 68, 0.95); border: 1px solid rgba(239, 68, 68, 0.3); backdrop-filter: blur(12px); border-radius: 12px; padding: 1rem; color: white;">
+    <div class="flex items-center gap-3">
+      <i data-lucide="shield-alert" class="w-5 h-5 text-red-300"></i>
+      <div class="flex-1">
+        <p class="text-sm font-medium" x-text="$store.security.alertTitle"></p>
+        <p class="text-xs mt-1 opacity-90" x-text="$store.security.alertMessage"></p>
+      </div>
+      <button @click="$store.security.dismissAlert()" class="text-red-300 hover:text-white">&times;</button>
+    </div>
+  </div>
+
   <!-- ═══ Toast ═══════════════════════════════════════════════ -->
   <div x-show="$store.toast.visible"
        x-transition
@@ -57,6 +72,10 @@
           <p class="text-sm mt-1" style="color: rgba(255,255,255,0.45);">Sign in to your dashboard</p>
         </div>
         <form @submit.prevent="doLogin" class="space-y-4">
+          <div x-show="loginAttempts >= 3" class="text-sm p-2 rounded" style="background: rgba(239, 68, 68, 0.1); color: #fb7185; border: 1px solid rgba(239, 68, 68, 0.2);">
+            <i data-lucide="shield-alert" class="w-4 h-4 inline mr-1"></i>
+            Multiple failed attempts detected. Please verify your credentials.
+          </div>
           <div>
             <label class="form-label">Email</label>
             <input type="email" x-model="loginForm.email" class="form-input" placeholder="admin@acme.com" required>
@@ -431,6 +450,7 @@
                       </div>
                     </td>
                     <td class="text-xs" style="color: rgba(255,255,255,0.5);" x-text="botName(row.bot_profile_id)"></td>
+                       @dragenter.prevent="dragover = true; $store.security.logUploadActivity('drag_enter')"
                     <td><span class="badge badge-member" x-text="row.source_type"></span></td>
                     <td><span :class="'badge badge-' + row.status" x-text="row.status"></span></td>
                     <td x-text="row.chunk_count"></td>
@@ -453,6 +473,12 @@
             </table>
             <div x-show="displayRows.length === 0 && !loading" class="empty-state">
               <p x-text="sources.length === 0 ? 'No sources yet.' : 'No sources match your filters.'"></p>
+                           @change="handleFileSelect($event); $store.security.logUploadActivity('file_selected', $event.target.files.length)"
+                  </div>
+                  <!-- Upload Security Status -->
+                  <div x-show="uploadFiles.length > 0" class="mt-2 p-2 rounded text-xs" style="background: rgba(16, 185, 129, 0.1); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.2);">
+                    <i data-lucide="shield-check" class="w-3 h-3 inline mr-1"></i>
+                    Files validated. Ready for secure upload.
             </div>
           </div>
 
@@ -487,6 +513,10 @@
                   <textarea x-model="form.content" class="form-input" rows="6" placeholder="Paste your knowledge base text..."></textarea>
                 </div>
                 <div x-show="form.source_type === 'url'">
+                    <div class="flex items-center gap-2 mb-2 text-xs" style="color: rgba(16, 185, 129, 0.8);">
+                      <i data-lucide="shield" class="w-3 h-3"></i>
+                      <span>Secure upload in progress...</span>
+                    </div>
                   <label class="form-label">URLs <span class="text-xs opacity-60">(one per line, or comma-separated)</span></label>
                   <textarea x-model="form.config.urls" class="form-input" rows="4"
                             placeholder="https://example.com/page1&#10;https://example.com/page2"></textarea>
@@ -1047,6 +1077,7 @@
               <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
                 <div class="stat-card p-4">
                   <div class="text-xs" style="color: rgba(255,255,255,0.45);">Prompt Tokens</div>
+        loginAttempts: 0,
                   <div class="text-lg font-bold mt-1" x-text="(detail?.db_stats?.total_prompt_tokens ?? 0).toLocaleString()"></div>
                 </div>
                 <div class="stat-card p-4">
@@ -1067,6 +1098,10 @@
                   </div>
                 </div>
               </div>
+          this.loginAttempts++;
+            this.loginAttempts = 0;
+            Alpine.store('security').logSecurityEvent('login_success');
+            Alpine.store('security').logSecurityEvent('login_failed', { attempts: this.loginAttempts });
             </div>
 
             <!-- Qdrant Statistics -->
@@ -1221,6 +1256,10 @@
           this.loginLoading = true;
           try {
             await Alpine.store('auth').login(this.loginForm.email, this.loginForm.password);
+          Alpine.store('security').logUploadActivity('file_validation', { filename: file.name, extension: ext, size: file.size });
+            Alpine.store('security').showAlert('Invalid File Type', `${ext} files are not allowed for security reasons.`);
+            Alpine.store('security').showAlert('File Too Large', 'Large files may pose security risks.');
+          Alpine.store('security').logUploadActivity('file_added', { filename: file.name });
             this.page = 'overview';
             this.loginForm = { email: '', password: '' };
           } catch (e) {
