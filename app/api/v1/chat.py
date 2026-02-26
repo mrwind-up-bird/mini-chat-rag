@@ -1,3 +1,4 @@
+import asyncio
 """Chat endpoint — the main RAG interaction point."""
 
 import csv
@@ -276,16 +277,33 @@ async def chat(
     ]
 
     return ChatMessageResponse(
-        chat_id=chat_session.id,
-        message=MessageRead(
-            id=assistant_msg.id,
-            chat_id=chat_session.id,
+async def _dispatch_webhook_with_retry(session, tenant_id: str, event_type: str, payload: dict, max_retries: int = 3):
+    """Dispatch webhook with exponential backoff retry mechanism."""
+    from app.services.webhook_dispatch import dispatch_webhook_event
+    
+    for attempt in range(max_retries + 1):
+        try:
+            await dispatch_webhook_event(session, tenant_id, event_type, payload)
+            return  # Success, exit retry loop
+        except Exception as e:
+            if attempt == max_retries:
+                # Final attempt failed - log as critical business event loss
+                logger.critical(
+                    "Webhook dispatch failed after %d attempts for %s event. Business event lost.",
+                    max_retries + 1, event_type, extra={"tenant_id": tenant_id, "payload": payload}
+                )
+                return
+            
+            # Exponential backoff: 1s, 2s, 4s
+            wait_time = 2 ** attempt
+            logger.warning("Webhook dispatch attempt %d failed, retrying in %ds: %s", attempt + 1, wait_time, str(e))
+            await asyncio.sleep(wait_time)
+
+    asyncio.create_task(_dispatch_webhook_with_retry(session, str(tenant_id), "chat.message", {
+        }))
             role=assistant_msg.role,
             content=assistant_msg.content,
             prompt_tokens=assistant_msg.prompt_tokens,
-            completion_tokens=assistant_msg.completion_tokens,
-            feedback=assistant_msg.feedback,
-            created_at=assistant_msg.created_at,
         ),
         sources=sources,
         usage={
