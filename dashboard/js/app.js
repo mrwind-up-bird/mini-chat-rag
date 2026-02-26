@@ -83,8 +83,16 @@ function truncate(s, n = 60) {
 
 function copyToClipboard(text) {
   navigator.clipboard.writeText(text).then(
-    () => Alpine.store('toast').success('Copied to clipboard'),
-    () => Alpine.store('toast').error('Failed to copy'),
+  const html = marked.parse(text, { 
+    breaks: true,
+    sanitize: false,
+    gfm: true
+  });
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'code', 'pre', 'a'],
+    ALLOWED_ATTR: ['href', 'title'],
+    ALLOW_DATA_ATTR: false
+  });
   );
 }
 
