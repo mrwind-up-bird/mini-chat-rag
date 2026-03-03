@@ -38,7 +38,13 @@ const API = {
 
     if (resp.status === 204) return null;
 
-    const data = await resp.json();
+    let data;
+    try {
+      data = await resp.json();
+    } catch {
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      throw new Error('Invalid JSON response');
+    }
 
     if (!resp.ok) {
       const msg = data.detail || `HTTP ${resp.status}`;
