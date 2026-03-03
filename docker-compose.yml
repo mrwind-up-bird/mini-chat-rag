@@ -1,11 +1,15 @@
 services:
   postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
     ports: !override []
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-minirag}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
       POSTGRES_DB: ${POSTGRES_DB:-minirag}
       POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
     deploy:
       resources:
         limits:
@@ -17,7 +21,11 @@ services:
         max-file: "3"
 
   qdrant:
+    image: qdrant/qdrant:v1.13.2
+    restart: unless-stopped
     ports: !override []
+    volumes:
+      - qdrant_data:/qdrant/storage
     deploy:
       resources:
         limits:
@@ -29,6 +37,8 @@ services:
         max-file: "3"
 
   redis:
+    image: redis:7-alpine
+    restart: unless-stopped
     ports: !override []
     deploy:
       resources:
@@ -41,8 +51,16 @@ services:
         max-file: "3"
 
   web:
+    build:
+      context: .
+      target: web
+    restart: unless-stopped
     ports: !override []
-    volumes: !override []
+    env_file: .env
+    depends_on:
+      - postgres
+      - qdrant
+      - redis
     deploy:
       resources:
         limits:
@@ -65,7 +83,15 @@ services:
       - "traefik.http.services.minirag.loadbalancer.server.port=8000"
 
   worker:
-    volumes: !override []
+    build:
+      context: .
+      target: worker
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      - postgres
+      - qdrant
+      - redis
     deploy:
       resources:
         limits:
@@ -75,6 +101,10 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+volumes:
+  pgdata:
+  qdrant_data:
 
 networks:
   proxy-network:
