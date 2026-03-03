@@ -351,9 +351,19 @@ async def _stream_chat_sse(
                 },
             })
 
-    except Exception:
+    except Exception as exc:
         logger.exception("Error during streaming chat")
-        yield _format_sse("error", {"detail": "An error occurred during generation."})
+        # Surface actionable detail to the client
+        detail = str(exc) or type(exc).__name__
+        # Detect common LLM auth/quota errors
+        exc_lower = detail.lower()
+        if any(k in exc_lower for k in ("auth", "api key", "401", "403", "invalid_api_key")):
+            detail = f"LLM authentication failed: {detail}"
+        elif any(k in exc_lower for k in ("rate limit", "429", "quota")):
+            detail = f"LLM rate limit exceeded: {detail}"
+        elif any(k in exc_lower for k in ("timeout", "timed out")):
+            detail = f"LLM request timed out: {detail}"
+        yield _format_sse("error", {"detail": detail})
 
 
 # ── Persistence helper ────────────────────────────────────────
