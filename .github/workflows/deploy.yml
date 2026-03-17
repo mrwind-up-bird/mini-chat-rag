@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "app/**"
+      - "alembic/**"
       - "dashboard/**"
       - "Dockerfile"
       - "docker-compose*.yml"
@@ -25,4 +26,5 @@ jobs:
             cd /opt/minirag
             git pull origin main
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+            docker compose exec -T web alembic upgrade head
             docker image prune -f
