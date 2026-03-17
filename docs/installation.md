@@ -147,7 +147,7 @@ pytest tests/test_webhooks.py -v
 pytest tests/test_chat.py::test_chat_new_conversation -v
 ```
 
-Currently 129 tests covering auth, CRUD, ingestion, chat, streaming, webhooks, export, analytics, and more.
+Currently 144 tests covering auth, CRUD, ingestion, chat, streaming, webhooks, export, analytics, NyxCore integration, and more.
 
 ## Production Considerations
 

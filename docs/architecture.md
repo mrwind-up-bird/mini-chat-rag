@@ -45,6 +45,7 @@ graph TB
     
     subgraph "External"
         LLM_API[LLM Providers<br/>OpenAI / Anthropic / Google]
+        NyxCore[NyxCore Axiom<br/>Hybrid Search API]
         ExtWebhooks[Webhook URLs]
     end
     
@@ -52,6 +53,7 @@ graph TB
     Gateway --> Bots & Sources & Chat & Webhooks_R & Stats_R
     
     Chat --> Orchestrator
+    Chat -->|NyxCore sources| NyxCore
     Orchestrator --> EmbedSvc --> LLM_API
     Orchestrator --> VectorSvc --> Qdrant
     Orchestrator --> LLM_API
@@ -130,13 +132,23 @@ sequenceDiagram
     participant V as Qdrant
     participant LLM as LiteLLM
     participant DB as PostgreSQL
+    participant NyxCore as NyxCore Axiom
     participant WH as Webhook Dispatch
-    
+
     C->>API: POST /v1/chat {message, bot_profile_id, stream?}
     API->>DB: Load bot profile + chat history
     API->>DB: Save user message
-    
-    API->>O: run_chat_turn() or run_chat_turn_stream()
+
+    opt NyxCore sources active for this bot
+        API->>API: _fetch_nyxcore_chunks()
+        API->>DB: SELECT active nyxcore sources
+        loop For each NyxCore source
+            API->>NyxCore: POST /api/v1/rag/search
+            NyxCore-->>API: AxiomChunk[] with authority levels
+        end
+    end
+
+    API->>O: run_chat_turn(extra_chunks) or run_chat_turn_stream(extra_chunks)
     O->>E: embed(user_message)
     E->>LLM: aembedding()
     LLM-->>E: vector
@@ -167,20 +179,23 @@ sequenceDiagram
 
 ### Context Injection
 
-The orchestrator injects retrieved chunks into the system prompt:
+The orchestrator injects retrieved chunks into the system prompt. When NyxCore sources are active, chunks include authority labels and are sorted with mandatory chunks first:
 
 ```
 {system_prompt}
 
 ---
 Relevant context from the knowledge base:
-[1] {chunk_1_content}
-[2] {chunk_2_content}
-[3] {chunk_3_content}
+[1] [MANDATORY] {nyxcore_chunk — rules.md}
+[2] [GUIDELINE] {nyxcore_chunk — guide.md}
+[3] {local_chunk}
 ---
 
 Use the context above to answer the user's question.
+Chunks marked [MANDATORY] are authoritative rules — always follow them.
 ```
+
+When no NyxCore sources are active, chunks appear without authority labels (standard RAG behavior).
 
 ## Streaming Protocol (SSE)
 
@@ -220,8 +235,9 @@ sequenceDiagram
     participant W as Ingest Worker
     participant DB as PostgreSQL
     participant Q as Qdrant
+    participant NyxCore as NyxCore Axiom
     participant WH as Webhook Dispatch
-    
+
     C->>API: POST /v1/sources/{id}/ingest
     API->>R: enqueue(ingest_source, source_id, tenant_id)
     API-->>C: 202 Accepted
@@ -229,7 +245,14 @@ sequenceDiagram
     R->>W: ingest_source(source_id, tenant_id)
     W->>DB: UPDATE source SET status='processing'
     
-    alt source_type = 'url'
+    alt source_type = 'nyxcore'
+        W->>W: _validate_nyxcore()
+        W->>W: Decrypt API token from config
+        W->>NyxCore: GET /api/v1/rag/documents
+        NyxCore-->>W: document list + chunk counts
+        W->>DB: UPDATE source SET status='ready', doc/chunk counts
+        Note over W: No chunking/embedding — queries happen at chat time
+    else source_type = 'url'
         W->>W: httpx.get(url) then html_to_text()
     else source_type = 'text' or 'upload'
         W->>W: use source.content
@@ -415,7 +438,7 @@ erDiagram
 | Enum | Values |
 |---|---|
 | `UserRole` | `owner`, `admin`, `member` |
-| `SourceType` | `text`, `upload`, `url` |
+| `SourceType` | `text`, `upload`, `url`, `nyxcore` |
 | `SourceStatus` | `pending`, `processing`, `ready`, `error` |
 | `RefreshSchedule` | `none`, `hourly`, `daily`, `weekly` |
 | `MessageRole` | `system`, `user`, `assistant` |

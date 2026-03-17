@@ -42,9 +42,10 @@ Knowledge sources that power your bot's RAG responses:
 1. **Create (Text)** — Select a bot profile, name your source, and paste text content
 2. **Create (URL)** — Enter a URL; the system fetches the page and extracts text automatically
 3. **Upload File** — Upload `.txt`, `.md`, `.csv`, `.pdf`, or `.docx` files for automatic text extraction
-4. **Batch Create** — Create multiple child sources under a parent (e.g., from a sitemap)
-5. **Ingest** — Click "Ingest" to process the source into chunks and vectors. Status: `pending` → `processing` → `ready`
-6. **Delete** — Soft-deletes the source and its vectors
+4. **Create (NyxCore)** — Connect to an external NyxCore Axiom knowledge base. Enter the base URL, API token, result limit, and authority levels (mandatory/guideline/informational). The system validates the connection by listing available documents — no local chunking or embedding is performed. NyxCore sources are queried at chat time via the Axiom hybrid search API.
+5. **Batch Create** — Create multiple child sources under a parent (e.g., from a sitemap)
+6. **Ingest** — Click "Ingest" to process the source into chunks and vectors. Status: `pending` → `processing` → `ready`. For NyxCore sources, ingestion validates the API connection rather than processing content.
+7. **Delete** — Soft-deletes the source and its vectors
 
 **Auto-Refresh (URL sources):**
 Set a refresh schedule when creating or editing a URL source:

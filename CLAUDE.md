@@ -36,9 +36,9 @@ Multi-tenant RAG platform: FastAPI + SQLModel (async) + PostgreSQL + Qdrant + Re
 
 **Request flow**: Bearer token → `app/api/deps.py:get_auth_context()` resolves to `AuthContext(tenant_id, user_id, role)` → route handler → service layer. Auth dispatch: tokens with dots go JWT path, others go API token path (SHA-256 lookup).
 
-**RAG pipeline** (`POST /v1/chat`): `orchestrator.run_chat_turn()` → embed query → Qdrant search (top_k=5, filtered by tenant_id + bot_profile_id) → build messages (system prompt + context + last 10 turns) → LiteLLM acompletion → save message + usage event.
+**RAG pipeline** (`POST /v1/chat`): `orchestrator.run_chat_turn()` → embed query → Qdrant search (top_k=5, filtered by tenant_id + bot_profile_id) → build messages (system prompt + context + last 10 turns) → LiteLLM acompletion → save message + usage event. If the bot has active NyxCore sources, `_fetch_nyxcore_chunks()` queries Axiom's hybrid search API and passes results as `extra_chunks` with authority labels (`[MANDATORY]`, `[GUIDELINE]`).
 
-**Ingestion pipeline** (`POST /v1/sources/{id}/ingest` → 202): Enqueues ARQ job → `workers/ingest.py:ingest_source()` → extract content → chunk (512/64) → embed → upsert to Qdrant → update source status.
+**Ingestion pipeline** (`POST /v1/sources/{id}/ingest` → 202): Enqueues ARQ job → `workers/ingest.py:ingest_source()` → extract content → chunk (512/64) → embed → upsert to Qdrant → update source status. NyxCore sources skip chunking/embedding — ingestion validates the API connection via `list_axiom_documents` and stores doc/chunk counts.
 
 **Dashboard** (`dashboard/`): No-build SPA (Alpine.js + Tailwind CDN). Served by FastAPI at `/dashboard` via static files + index.html catch-all. Embeddable chat widget at `dashboard/widget/`.
 
@@ -54,7 +54,7 @@ Every table has `tenant_id`. All queries must filter by `auth.tenant_id`. Cross-
 
 **Encrypted credentials**: BotProfile stores Fernet-encrypted JSON in `encrypted_credentials`. Read schema exposes `has_credentials: bool` instead of ciphertext. Decrypt with `decrypt_value()` from `core/security.py`.
 
-**Source config**: Stored as JSON text (`sa_column=Column(Text)`). Serialize with `json.dumps()` on write, `json.loads()` on read in route handlers.
+**Source config**: Stored as JSON text (`sa_column=Column(Text)`). Serialize with `json.dumps()` on write, `json.loads()` on read in route handlers. NyxCore sources encrypt `api_token` → `encrypted_token` in config via `_encrypt_config_token()` on create/update; API responses sanitize via `_sanitize_config()` (replaces `encrypted_token` with `has_api_token: true`).
 
 **Enums**: Use `StrEnum` for all role/type/status enums — serializes cleanly with Pydantic v2.
 
