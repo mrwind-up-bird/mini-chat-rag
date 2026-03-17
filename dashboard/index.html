@@ -394,6 +394,7 @@
               <option value="text">Text</option>
               <option value="url">URL</option>
               <option value="upload">Upload</option>
+              <option value="nyxcore">NyxCore</option>
             </select>
             <select x-model="filterStatus" class="form-input" style="width: auto; min-width: 130px;">
               <option value="">All Statuses</option>
@@ -480,6 +481,7 @@
                     <option value="text">Text</option>
                     <option value="url">URL</option>
                     <option value="upload">Upload</option>
+                    <option value="nyxcore">NyxCore Axiom</option>
                   </select>
                 </div>
                 <div x-show="form.source_type === 'text'">
@@ -499,6 +501,49 @@
                     <option value="daily">Daily</option>
                     <option value="weekly">Weekly</option>
                   </select>
+                </div>
+                <div x-show="form.source_type === 'nyxcore'" class="space-y-4">
+                  <div>
+                    <label class="form-label">Base URL</label>
+                    <input x-model="form.config.base_url" class="form-input" value="https://nyxcore.cloud"
+                           placeholder="https://nyxcore.cloud">
+                  </div>
+                  <div>
+                    <label class="form-label">API Token <span class="text-xs opacity-60">(nyx_ax_...)</span></label>
+                    <input x-model="form.config.api_token" type="password" class="form-input" required
+                           placeholder="nyx_ax_...">
+                  </div>
+                  <div>
+                    <label class="form-label">Result Limit</label>
+                    <input x-model.number="form.config.limit" type="number" class="form-input"
+                           min="1" max="50" placeholder="10">
+                  </div>
+                  <div>
+                    <label class="form-label">Authority Filter <span class="text-xs opacity-60">(which document types to include)</span></label>
+                    <div class="flex gap-4 mt-1">
+                      <label class="flex items-center gap-2 text-sm cursor-pointer" style="color: rgba(255,255,255,0.7);">
+                        <input type="checkbox" value="mandatory"
+                               :checked="(form.config.authority || []).includes('mandatory')"
+                               @change="toggleAuthority('mandatory')">
+                        Mandatory
+                      </label>
+                      <label class="flex items-center gap-2 text-sm cursor-pointer" style="color: rgba(255,255,255,0.7);">
+                        <input type="checkbox" value="guideline"
+                               :checked="(form.config.authority || []).includes('guideline')"
+                               @change="toggleAuthority('guideline')">
+                        Guideline
+                      </label>
+                      <label class="flex items-center gap-2 text-sm cursor-pointer" style="color: rgba(255,255,255,0.7);">
+                        <input type="checkbox" value="informational"
+                               :checked="(form.config.authority || []).includes('informational')"
+                               @change="toggleAuthority('informational')">
+                        Informational
+                      </label>
+                    </div>
+                  </div>
+                  <div class="text-xs p-3 rounded" style="background: rgba(167, 139, 250, 0.08); border: 1px solid rgba(167, 139, 250, 0.15); color: rgba(255,255,255,0.6);">
+                    NyxCore Axiom searches are performed at chat time. After creating, click <strong>Ingest</strong> to validate the connection.
+                  </div>
                 </div>
                 <div x-show="form.source_type === 'upload'">
                   <label class="form-label">Files</label>
@@ -562,7 +607,7 @@
                 <div class="flex justify-end gap-2">
                   <button type="button" @click="showCreate = false" class="btn-secondary">Cancel</button>
                   <button type="submit" class="btn-primary" :disabled="saving || uploading">
-                    <span x-show="!uploading" x-text="form.source_type === 'upload' ? (uploadFiles.length > 1 ? 'Upload ' + uploadFiles.length + ' Files' : 'Upload') : 'Create'"></span>
+                    <span x-show="!uploading" x-text="form.source_type === 'upload' ? (uploadFiles.length > 1 ? 'Upload ' + uploadFiles.length + ' Files' : 'Upload') : (form.source_type === 'nyxcore' ? 'Connect' : 'Create')"></span>
                     <span x-show="uploading" class="flex items-center gap-2"><span class="spinner"></span> Uploading...</span>
                   </button>
                 </div>
@@ -1411,7 +1456,7 @@
         loading: false,
         showCreate: false,
         saving: false,
-        form: { bot_profile_id: '', name: '', source_type: 'text', content: '', config: {}, refresh_schedule: '' },
+        form: { bot_profile_id: '', name: '', source_type: 'text', content: '', config: { base_url: 'https://nyxcore.cloud', authority: [] }, refresh_schedule: '' },
         uploadFiles: [],
         uploading: false,
         uploadProgress: 0,
@@ -1538,6 +1583,16 @@
           return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
         },
 
+        toggleAuthority(level) {
+          if (!this.form.config.authority) this.form.config.authority = [];
+          const idx = this.form.config.authority.indexOf(level);
+          if (idx === -1) {
+            this.form.config.authority.push(level);
+          } else {
+            this.form.config.authority.splice(idx, 1);
+          }
+        },
+
         async createSource() {
           if (this.form.source_type === 'upload') {
             await this.uploadSource();
@@ -1545,6 +1600,10 @@
           }
           if (this.form.source_type === 'url') {
             await this.createUrlSources();
+            return;
+          }
+          if (this.form.source_type === 'nyxcore') {
+            await this.createNyxcoreSource();
             return;
           }
           this.saving = true;
@@ -1560,8 +1619,55 @@
             await API.createSource(data);
             Alpine.store('toast').success('Source created');
             this.showCreate = false;
-            this.form = { bot_profile_id: '', name: '', source_type: 'text', content: '', config: {} };
+            this.form = { bot_profile_id: '', name: '', source_type: 'text', content: '', config: { base_url: 'https://nyxcore.cloud', authority: [] }, refresh_schedule: '' };
             await this.load();
+          } catch (e) { Alpine.store('toast').error(e.message); }
+          this.saving = false;
+        },
+
+        async createNyxcoreSource() {
+          const token = (this.form.config.api_token || '').trim();
+          if (!token) {
+            Alpine.store('toast').error('Please enter a NyxCore API token.');
+            return;
+          }
+          this.saving = true;
+          try {
+            const config = {
+              base_url: (this.form.config.base_url || 'https://nyxcore.cloud').trim(),
+              api_token: token,
+              limit: this.form.config.limit || 10,
+            };
+            if (this.form.config.authority && this.form.config.authority.length > 0) {
+              config.authority = this.form.config.authority;
+            }
+            const source = await API.createSource({
+              bot_profile_id: this.form.bot_profile_id,
+              name: this.form.name || 'NyxCore Axiom',
+              source_type: 'nyxcore',
+              config,
+            });
+            // Auto-trigger validation
+            try { await API.triggerIngest(source.id); } catch {}
+            Alpine.store('toast').success('NyxCore source created & validating connection...');
+            this.showCreate = false;
+            this.form = { bot_profile_id: '', name: '', source_type: 'text', content: '', config: { base_url: 'https://nyxcore.cloud', authority: [] }, refresh_schedule: '' };
+            await this.load();
+            // Poll for validation result
+            const poll = setInterval(async () => {
+              try {
+                await this.load();
+                const updated = this.sources.find(s => s.id === source.id);
+                if (updated && updated.status !== 'processing') {
+                  clearInterval(poll);
+                  if (updated.status === 'ready') {
+                    Alpine.store('toast').success(`NyxCore connected: ${updated.document_count} documents, ${updated.chunk_count} chunks`);
+                  } else if (updated.status === 'error') {
+                    Alpine.store('toast').error(`NyxCore validation failed: ${updated.error_message || 'Unknown error'}`);
+                  }
+                }
+              } catch { clearInterval(poll); }
+            }, 2000);
           } catch (e) { Alpine.store('toast').error(e.message); }
           this.saving = false;
         },
@@ -1594,7 +1700,7 @@
               await API.triggerIngest(source.id);
               Alpine.store('toast').success('Source created & ingestion started');
               this.showCreate = false;
-              this.form = { bot_profile_id: '', name: '', source_type: 'text', content: '', config: {} };
+              this.form = { bot_profile_id: '', name: '', source_type: 'text', content: '', config: { base_url: 'https://nyxcore.cloud', authority: [] }, refresh_schedule: '' };
               await this.load();
             } catch (e) { Alpine.store('toast').error(e.message); }
           } else {
@@ -1615,7 +1721,7 @@
               await API.triggerIngestChildren(result.parent.id);
               Alpine.store('toast').success(`${urls.length} sources created & ingestion started`);
               this.showCreate = false;
-              this.form = { bot_profile_id: '', name: '', source_type: 'text', content: '', config: {} };
+              this.form = { bot_profile_id: '', name: '', source_type: 'text', content: '', config: { base_url: 'https://nyxcore.cloud', authority: [] }, refresh_schedule: '' };
               await this.load();
             } catch (e) { Alpine.store('toast').error(e.message); }
           }
@@ -1676,7 +1782,7 @@
             Alpine.store('toast').success(failed > 0 ? `${msg} (${failed} failed)` : msg);
             this.showCreate = false;
             this.uploadFiles = [];
-            this.form = { bot_profile_id: '', name: '', source_type: 'text', content: '', config: {} };
+            this.form = { bot_profile_id: '', name: '', source_type: 'text', content: '', config: { base_url: 'https://nyxcore.cloud', authority: [] }, refresh_schedule: '' };
             await this.load();
           }
         },

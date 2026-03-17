@@ -14,6 +14,7 @@ class SourceType(StrEnum):
     TEXT = "text"
     UPLOAD = "upload"
     URL = "url"
+    NYXCORE = "nyxcore"
 
 
 class SourceStatus(StrEnum):

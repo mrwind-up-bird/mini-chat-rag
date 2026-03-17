@@ -11,13 +11,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.core.database import async_session_factory
+from app.core.security import decrypt_value
 from app.models.base import utcnow
 from app.models.chunk import Chunk
 from app.models.document import Document
-from app.models.source import Source, SourceStatus
+from app.models.source import Source, SourceStatus, SourceType
 from app.services.chunking import chunk_text
 from app.services.embedding import embed_texts
 from app.services.html_extract import html_to_text
+from app.services.nyxcore import list_axiom_documents
 from app.services.vector_store import delete_by_source, ensure_collection, upsert_chunks
 
 logger = logging.getLogger(__name__)
@@ -50,6 +52,11 @@ async def ingest_source(ctx: dict, source_id: str, tenant_id: str) -> dict:
             source.error_message = None
             session.add(source)
             await session.commit()
+
+            # NyxCore sources: validate connection, no local chunking
+            if source.source_type == SourceType.NYXCORE:
+                result = await _validate_nyxcore(session, source)
+                return result
 
             # 1. Extract raw content
             raw_content = await _extract_content(source)
@@ -204,6 +211,37 @@ async def _get_source(session: AsyncSession, source_id: str, tenant_id: str) -> 
     )
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
+
+
+async def _validate_nyxcore(session: AsyncSession, source: Source) -> dict:
+    """Validate a NyxCore source by listing its documents."""
+    config = json.loads(source.config) if isinstance(source.config, str) else source.config
+    base_url = config.get("base_url", "https://nyxcore.cloud")
+    encrypted_token = config.get("encrypted_token", "")
+    if not encrypted_token:
+        await _mark_error(session, source, "No API token configured")
+        return {"error": "no_token"}
+
+    api_token = decrypt_value(encrypted_token)
+    documents = await list_axiom_documents(api_token, base_url=base_url)
+
+    doc_count = len(documents)
+    ready_docs = [d for d in documents if d.get("status") == "ready"]
+    total_chunks = sum(d.get("chunkCount", 0) for d in ready_docs)
+
+    source.status = SourceStatus.READY
+    source.document_count = len(ready_docs)
+    source.chunk_count = total_chunks
+    source.error_message = None
+    source.last_refreshed_at = utcnow()
+    session.add(source)
+    await session.commit()
+
+    logger.info(
+        "Validated NyxCore source %s: %d documents, %d chunks",
+        source.id, doc_count, total_chunks,
+    )
+    return {"document_count": doc_count, "chunk_count": total_chunks}
 
 
 async def _mark_error(session: AsyncSession, source: Source, message: str) -> None:

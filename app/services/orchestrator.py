@@ -31,11 +31,13 @@ MAX_HISTORY_TURNS = 10
 
 @dataclass
 class RetrievedChunk:
-    """A chunk retrieved from vector search."""
+    """A chunk retrieved from vector search or external source."""
     chunk_id: str
     content: str
     score: float
     source_id: str
+    authority: str | None = None  # NyxCore authority level
+    source_label: str | None = None  # e.g. filename for NyxCore chunks
 
 
 @dataclass
@@ -65,6 +67,7 @@ async def run_chat_turn(
     history: list[dict] | None = None,
     top_k: int = DEFAULT_TOP_K,
     api_key: str | None = None,
+    extra_chunks: list[RetrievedChunk] | None = None,
 ) -> ChatResponse:
     """Execute one chat turn through the RAG pipeline.
 
@@ -75,6 +78,7 @@ async def run_chat_turn(
         history: Previous messages as [{role, content}, ...].
         top_k: Number of context chunks to retrieve.
         api_key: Optional provider API key (from decrypted bot_profile credentials).
+        extra_chunks: Additional chunks from external sources (e.g. NyxCore).
 
     Returns:
         ChatResponse with the assistant's reply and usage stats.
@@ -101,6 +105,10 @@ async def run_chat_turn(
             )
             for r in results
         ]
+
+    # 2b. Merge external chunks (NyxCore etc.) — mandatory-authority first
+    if extra_chunks:
+        retrieved = _merge_chunks(extra_chunks, retrieved)
 
     # 3. Assemble the LLM messages
     messages = _build_messages(
@@ -145,6 +153,7 @@ async def run_chat_turn_stream(
     history: list[dict] | None = None,
     top_k: int = DEFAULT_TOP_K,
     api_key: str | None = None,
+    extra_chunks: list[RetrievedChunk] | None = None,
 ) -> AsyncGenerator[StreamEvent | ChatResponse, None]:
     """Execute a streaming chat turn through the RAG pipeline.
 
@@ -172,6 +181,10 @@ async def run_chat_turn_stream(
             )
             for r in results
         ]
+
+    # 1b. Merge external chunks
+    if extra_chunks:
+        retrieved = _merge_chunks(extra_chunks, retrieved)
 
     # 2. Yield sources immediately (before LLM call)
     sources_data = [
@@ -249,6 +262,23 @@ async def run_chat_turn_stream(
     )
 
 
+def _merge_chunks(
+    extra: list[RetrievedChunk],
+    local: list[RetrievedChunk],
+) -> list[RetrievedChunk]:
+    """Merge external chunks with local Qdrant chunks.
+
+    Ordering: mandatory-authority chunks first, then everything by score descending.
+    """
+    combined = list(extra) + list(local)
+    # mandatory first, then guideline, then the rest — within each group, by score
+    authority_order = {"mandatory": 0, "guideline": 1, "informational": 2}
+    combined.sort(
+        key=lambda c: (authority_order.get(c.authority or "", 3), -c.score),
+    )
+    return combined
+
+
 def _build_messages(
     system_prompt: str,
     retrieved_chunks: list[RetrievedChunk],
@@ -263,11 +293,17 @@ def _build_messages(
     if retrieved_chunks:
         context_parts = []
         for i, chunk in enumerate(retrieved_chunks, 1):
-            context_parts.append(f"[{i}] {chunk.content}")
+            label = f"[{i}]"
+            if chunk.authority:
+                label = f"[{i}] [{chunk.authority.upper()}]"
+                if chunk.source_label:
+                    label += f" ({chunk.source_label})"
+            context_parts.append(f"{label} {chunk.content}")
         context_block = (
             "\n\n---\nRelevant context from the knowledge base:\n"
             + "\n\n".join(context_parts)
             + "\n---\n\nUse the context above to answer the user's question. "
+            "Chunks marked [MANDATORY] are rules that must be followed. "
             "If the context doesn't contain relevant information, say so."
         )
 

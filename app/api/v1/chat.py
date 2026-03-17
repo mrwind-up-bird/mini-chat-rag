@@ -19,9 +19,12 @@ from app.core.security import decrypt_value
 from app.models.bot_profile import BotProfile
 from app.models.chat import Chat, ChatRead
 from app.models.message import Message, MessageRead, MessageRole
+from app.models.source import Source, SourceStatus, SourceType
 from app.models.usage_event import UsageEvent
+from app.services.nyxcore import search_axiom
 from app.services.orchestrator import (
     ChatResponse,
+    RetrievedChunk,
     StreamEvent,
     run_chat_turn,
     run_chat_turn_stream,
@@ -216,6 +219,11 @@ async def chat(
         creds = json.loads(decrypt_value(bot_profile.encrypted_credentials))
         api_key = creds.get("api_key")
 
+    # ── Fetch external context from NyxCore sources ──────────
+    extra_chunks = await _fetch_nyxcore_chunks(
+        body.message, bot_profile.id, tenant_id, session,
+    )
+
     # ── Streaming path ───────────────────────────────────────
     if body.stream:
         return StreamingResponse(
@@ -226,6 +234,7 @@ async def chat(
                 chat_session=chat_session,
                 history=history,
                 api_key=api_key,
+                extra_chunks=extra_chunks,
                 session=session,
             ),
             media_type="text/event-stream",
@@ -235,13 +244,14 @@ async def chat(
             },
         )
 
-    # ── Non-streaming path (unchanged) ───────────────────────
+    # ── Non-streaming path ───────────────────────────────────
     result = await run_chat_turn(
         user_message=body.message,
         bot_profile=bot_profile,
         tenant_id=str(tenant_id),
         history=history,
         api_key=api_key,
+        extra_chunks=extra_chunks,
     )
 
     assistant_msg = await _persist_assistant_message(
@@ -311,6 +321,7 @@ async def _stream_chat_sse(
     chat_session: Chat,
     history: list[dict],
     api_key: str | None,
+    extra_chunks: list[RetrievedChunk],
     session,
 ) -> AsyncGenerator[str, None]:
     """Async generator that yields SSE-formatted events from the orchestrator."""
@@ -322,6 +333,7 @@ async def _stream_chat_sse(
             tenant_id=str(tenant_id),
             history=history,
             api_key=api_key,
+            extra_chunks=extra_chunks,
         ):
             if isinstance(item, StreamEvent):
                 yield _format_sse(item.event, item.data)
@@ -538,6 +550,63 @@ async def submit_feedback(
     await session.commit()
     await session.refresh(msg)
     return MessageRead.model_validate(msg)
+
+
+# ── NyxCore retrieval ─────────────────────────────────────────
+
+async def _fetch_nyxcore_chunks(
+    user_message: str,
+    bot_profile_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+    session,
+) -> list[RetrievedChunk]:
+    """Search all active NyxCore sources for this bot and return chunks."""
+    stmt = select(Source).where(
+        Source.bot_profile_id == bot_profile_id,
+        Source.tenant_id == tenant_id,
+        Source.source_type == SourceType.NYXCORE,
+        Source.status == SourceStatus.READY,
+        Source.is_active.is_(True),  # type: ignore[union-attr]
+    )
+    result = await session.execute(stmt)
+    nyxcore_sources = result.scalars().all()
+
+    if not nyxcore_sources:
+        return []
+
+    chunks: list[RetrievedChunk] = []
+    for src in nyxcore_sources:
+        config = json.loads(src.config) if isinstance(src.config, str) else src.config
+        encrypted_token = config.get("encrypted_token", "")
+        if not encrypted_token:
+            continue
+
+        base_url = config.get("base_url", "https://nyxcore.cloud")
+        limit = config.get("limit", 10)
+        authority = config.get("authority")
+
+        try:
+            api_token = decrypt_value(encrypted_token)
+            axiom_results = await search_axiom(
+                api_token=api_token,
+                query=user_message,
+                base_url=base_url,
+                limit=limit,
+                authority=authority,
+            )
+            for ac in axiom_results:
+                chunks.append(RetrievedChunk(
+                    chunk_id=ac.chunk_id,
+                    content=ac.content,
+                    score=ac.score,
+                    source_id=str(src.id),
+                    authority=ac.authority,
+                    source_label=ac.filename,
+                ))
+        except Exception:
+            logger.warning("NyxCore search failed for source %s", src.id, exc_info=True)
+
+    return chunks
 
 
 # ── Internal helpers ──────────────────────────────────────────

@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from sqlmodel import select
 
 from app.api.deps import Auth, Session
+from app.core.security import encrypt_value
 from app.models.base import utcnow
 from app.models.bot_profile import BotProfile
 from app.models.source import (
@@ -64,6 +65,23 @@ class IngestChildrenResponse(BaseModel):
 # ── Helpers ───────────────────────────────────────────────────
 
 
+def _encrypt_config_token(config: dict) -> dict:
+    """If config contains api_token, encrypt it and return updated config."""
+    if "api_token" in config:
+        raw = config.pop("api_token")
+        config["encrypted_token"] = encrypt_value(raw)
+    return config
+
+
+def _sanitize_config(config: dict) -> dict:
+    """Replace encrypted_token with has_api_token flag for API responses."""
+    safe = dict(config)
+    if "encrypted_token" in safe:
+        del safe["encrypted_token"]
+        safe["has_api_token"] = True
+    return safe
+
+
 def _to_read(
     src: Source,
     children_count: int = 0,
@@ -72,6 +90,7 @@ def _to_read(
 ) -> SourceRead:
     """Convert a Source ORM instance to SourceRead schema."""
     config = json.loads(src.config) if isinstance(src.config, str) else src.config
+    config = _sanitize_config(config)
     return SourceRead(
         id=src.id,
         tenant_id=src.tenant_id,
@@ -260,6 +279,10 @@ async def create_source(
     if body.parent_id is not None:
         await _validate_parent(body.parent_id, auth.tenant_id, body.bot_profile_id, session)
 
+    config = dict(body.config)
+    if body.source_type == SourceType.NYXCORE:
+        config = _encrypt_config_token(config)
+
     src = Source(
         tenant_id=auth.tenant_id,
         bot_profile_id=body.bot_profile_id,
@@ -267,7 +290,7 @@ async def create_source(
         name=body.name,
         description=body.description,
         source_type=body.source_type,
-        config=json.dumps(body.config),
+        config=json.dumps(config),
         content=body.content,
         refresh_schedule=body.refresh_schedule,
     )
@@ -434,6 +457,8 @@ async def update_source(
     update_data = body.model_dump(exclude_unset=True)
 
     if "config" in update_data:
+        if src.source_type == SourceType.NYXCORE:
+            update_data["config"] = _encrypt_config_token(update_data["config"])
         update_data["config"] = json.dumps(update_data["config"])
 
     for field, value in update_data.items():
