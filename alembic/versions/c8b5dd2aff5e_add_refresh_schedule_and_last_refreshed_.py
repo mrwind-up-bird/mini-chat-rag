@@ -19,8 +19,13 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column("sources", sa.Column("refresh_schedule", sa.String(20), nullable=True))
-    op.add_column("sources", sa.Column("last_refreshed_at", sa.DateTime(), nullable=True))
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    columns = {c["name"] for c in inspector.get_columns("sources")}
+    if "refresh_schedule" not in columns:
+        op.add_column("sources", sa.Column("refresh_schedule", sa.String(20), nullable=True))
+    if "last_refreshed_at" not in columns:
+        op.add_column("sources", sa.Column("last_refreshed_at", sa.DateTime(), nullable=True))
 
 
 def downgrade() -> None:
