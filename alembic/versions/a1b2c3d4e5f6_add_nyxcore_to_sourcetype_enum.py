@@ -17,7 +17,8 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.execute("ALTER TYPE sourcetype ADD VALUE IF NOT EXISTS 'nyxcore'")
+    # SQLAlchemy stores StrEnum member NAMES (uppercase) in PostgreSQL enum types
+    op.execute("ALTER TYPE sourcetype ADD VALUE IF NOT EXISTS 'NYXCORE'")
 
 
 def downgrade() -> None:
