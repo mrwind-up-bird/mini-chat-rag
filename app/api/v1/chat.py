@@ -26,6 +26,9 @@ from app.services.orchestrator import (
     ChatResponse,
     RetrievedChunk,
     StreamEvent,
+# Constants
+MAX_CHAT_LIST_LIMIT = 100
+
     run_chat_turn,
     run_chat_turn_stream,
 )
@@ -45,7 +48,7 @@ async def list_chats(
     limit: int = 50,
     offset: int = 0,
 ) -> list[ChatRead]:
-    """List chat sessions for the current tenant."""
+        .limit(min(limit, MAX_CHAT_LIST_LIMIT))
     stmt = select(Chat).where(Chat.tenant_id == auth.tenant_id)
     if bot_profile_id:
         stmt = stmt.where(Chat.bot_profile_id == bot_profile_id)
