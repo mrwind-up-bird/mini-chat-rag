@@ -33,6 +33,7 @@ Edit `.env` with your settings:
 | `JWT_SECRET_KEY` | Secret for JWT signing | *required* |
 | `JWT_ALGORITHM` | JWT algorithm | `HS256` |
 | `JWT_EXPIRE_MINUTES` | JWT token TTL | `60` |
+| `ALLOWED_ORIGINS` | CORS allowed origins (comma-separated) | `*` |
 | `DEFAULT_LLM_MODEL` | Default LLM model | `gpt-4o-mini` |
 | `DEFAULT_EMBEDDING_MODEL` | Default embedding model | `text-embedding-3-small` |
 
@@ -106,9 +107,8 @@ Services:
 - **postgres** — `localhost:5432` (metadata, auth)
 - **qdrant** — `localhost:6333` (REST), `localhost:6334` (gRPC) — vector storage
 - **redis** — `localhost:6379` (task queue)
-- **web** — `localhost:8000` (API + Dashboard)
+- **web** — `localhost:8000` (API + Dashboard), with Traefik labels for production reverse proxy
 - **worker** — ARQ background worker (ingestion + auto-refresh cron)
-- **caddy** — `localhost:80/443` (reverse proxy with auto-TLS)
 
 ## Database Migrations (Alembic)
 
@@ -154,7 +154,7 @@ Currently 144 tests covering auth, CRUD, ingestion, chat, streaming, webhooks, e
 - Run `alembic upgrade head` after every deployment with schema changes
 - Set strong `ENCRYPTION_KEY` and `JWT_SECRET_KEY` values
 - Configure CORS `allow_origins` to your domain (not `*`)
-- Use Caddy or nginx for TLS termination (Caddy handles auto-TLS via Let's Encrypt)
+- Use Traefik or nginx for TLS termination (Traefik handles auto-TLS via Let's Encrypt)
 - Set `JWT_EXPIRE_MINUTES` to an appropriate value
 - Monitor with the `/v1/system/health` endpoint
 - Set up webhook endpoints to receive notifications for ingestion and chat events

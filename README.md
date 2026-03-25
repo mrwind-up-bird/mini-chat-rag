@@ -67,7 +67,7 @@ graph TB
 | Auth | Argon2 passwords, SHA-256 API tokens, Fernet field encryption, JWT |
 | Migrations | Alembic (async) |
 | Containerization | Docker & Docker Compose |
-| Reverse proxy | Caddy (auto-TLS) |
+| Reverse proxy | Traefik (auto-TLS via Let's Encrypt) |
 | Dashboard | HTML + Tailwind CSS (CDN) + Alpine.js + Chart.js — no build step |
 
 ## Dashboard
@@ -243,6 +243,8 @@ curl -N -X POST http://localhost:8000/v1/chat \
 | `PATCH` | `/v1/sources/{id}` | Yes | Update source |
 | `DELETE` | `/v1/sources/{id}` | Yes | Deactivate source |
 | `POST` | `/v1/sources/{id}/ingest` | Yes | Trigger ingestion (202) |
+| `POST` | `/v1/sources/{id}/ingest-children` | Yes | Trigger ingestion for child sources (202) |
+| `GET` | `/v1/sources/{id}/children` | Yes | List child sources |
 | `POST` | `/v1/sources/upload` | Yes | Upload file source |
 | `POST` | `/v1/sources/batch` | Yes | Batch create child sources |
 
@@ -290,6 +292,7 @@ curl -N -X POST http://localhost:8000/v1/chat \
 | `PATCH` | `/v1/users/{id}` | Yes | Update user (admin+) |
 | `DELETE` | `/v1/users/{id}` | Yes | Deactivate user (admin+) |
 | `GET` | `/v1/system/health` | Yes | Service connectivity check |
+| `GET` | `/v1/system/health/detailed` | Yes | Detailed health with component status |
 
 ## Data Model
 
@@ -299,7 +302,7 @@ curl -N -X POST http://localhost:8000/v1/chat \
 - **User** — Belongs to tenant (owner/admin/member roles)
 - **ApiToken** — Bearer tokens (SHA-256 hashed, shown once at creation)
 - **BotProfile** — AI assistant config (model, prompt, Fernet-encrypted credentials)
-- **Source** — Knowledge source (text/upload/url) with ingestion status and auto-refresh schedule
+- **Source** — Knowledge source (text/upload/url/nyxcore) with ingestion status and auto-refresh schedule
 - **Document** — Raw content extracted from a source
 - **Chunk** — Indexed text segment with Qdrant vector reference
 - **Chat** — Conversation session with token counters
@@ -405,9 +408,9 @@ docs/
   installation.md          # Setup & maintenance guide
   admin-guide.md           # Dashboard usage guide
   widget-integration.md    # Widget embedding guide
-tests/                     # 129 async integration tests
+tests/                     # 144 async integration tests
 postman/                   # Postman collection (28+ requests, auto-tests)
-docker-compose.yml         # Postgres, Qdrant, Redis, web, worker, Caddy
+docker-compose.yml         # Postgres, Qdrant, Redis, web, worker
 Dockerfile                 # Multi-stage (web + worker targets)
 ```
 
