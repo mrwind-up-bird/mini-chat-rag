@@ -1,3 +1,4 @@
+import os
 """Seed an admin user + tenant. Run inside the web container."""
 
 import asyncio
@@ -16,8 +17,8 @@ async def main():
 
         user = User(
             tenant_id=tenant.id,
-            email="oliver.baer@gmail.com",
-            password_hash=hash_password("meister12"),
+            email=os.environ.get("ADMIN_EMAIL", "admin@example.com"),
+            password_hash=hash_password(os.environ.get("ADMIN_PASSWORD", "changeme123")),
             role="admin",
         )
         session.add(user)
