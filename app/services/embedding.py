@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from litellm import aembedding
 
+# Maximum total texts to prevent memory exhaustion
+MAX_TOTAL_TEXTS = 10000
 # Default embedding model — small, fast, cheap
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 DEFAULT_EMBEDDING_DIMENSIONS = 1536
@@ -22,6 +24,10 @@ async def embed_texts(
         model: Embedding model name (LiteLLM format). Defaults to text-embedding-3-small.
         api_key: Optional provider API key. If None, uses env vars (OPENAI_API_KEY, etc.).
 
+    
+    # Prevent processing extremely large text collections
+    if len(texts) > MAX_TOTAL_TEXTS:
+        raise ValueError(f"Too many texts to embed: {len(texts)}. Maximum allowed: {MAX_TOTAL_TEXTS}")
     Returns:
         List of embedding vectors (same order as input texts).
     """
