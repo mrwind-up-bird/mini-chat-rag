@@ -50,8 +50,18 @@ def get_embedding_dimensions(model: str | None = None) -> int:
     model = model or DEFAULT_EMBEDDING_MODEL
     # Known dimensions for common models
     dims = {
+        # OpenAI
         "text-embedding-3-small": 1536,
         "text-embedding-3-large": 3072,
         "text-embedding-ada-002": 1536,
+        # Google Gemini (via LiteLLM prefix)
+        "gemini/text-embedding-004": 768,
+        "text-embedding-004": 768,
+        # Cohere
+        "cohere/embed-english-v3.0": 1024,
+        "cohere/embed-multilingual-v3.0": 1024,
+        # Voyage
+        "voyage/voyage-3-large": 1024,
+        "voyage/voyage-3-lite": 512,
     }
     return dims.get(model, DEFAULT_EMBEDDING_DIMENSIONS)

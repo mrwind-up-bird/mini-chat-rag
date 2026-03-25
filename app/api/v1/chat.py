@@ -219,6 +219,8 @@ async def chat(
         creds = json.loads(decrypt_value(bot_profile.encrypted_credentials))
         api_key = creds.get("api_key")
 
+    embedding_model = bot_profile.embedding_model
+
     # ── Fetch external context from NyxCore sources ──────────
     extra_chunks = await _fetch_nyxcore_chunks(
         body.message, bot_profile.id, tenant_id, session,
@@ -236,6 +238,7 @@ async def chat(
                 api_key=api_key,
                 extra_chunks=extra_chunks,
                 session=session,
+                embedding_model=embedding_model,
             ),
             media_type="text/event-stream",
             headers={
@@ -252,6 +255,7 @@ async def chat(
         history=history,
         api_key=api_key,
         extra_chunks=extra_chunks,
+        embedding_model=embedding_model,
     )
 
     assistant_msg = await _persist_assistant_message(
@@ -323,6 +327,7 @@ async def _stream_chat_sse(
     api_key: str | None,
     extra_chunks: list[RetrievedChunk],
     session,
+    embedding_model: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """Async generator that yields SSE-formatted events from the orchestrator."""
     result: ChatResponse | None = None
@@ -334,6 +339,7 @@ async def _stream_chat_sse(
             history=history,
             api_key=api_key,
             extra_chunks=extra_chunks,
+            embedding_model=embedding_model,
         ):
             if isinstance(item, StreamEvent):
                 yield _format_sse(item.event, item.data)

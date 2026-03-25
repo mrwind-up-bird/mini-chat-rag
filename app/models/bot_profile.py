@@ -23,6 +23,10 @@ class BotProfile(TimestampMixin, SQLModel, table=True):
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     max_tokens: int = Field(default=1024, ge=1, le=128000)
 
+    # Embedding model (LiteLLM format, e.g. "text-embedding-3-small", "gemini/text-embedding-004").
+    # NULL means "use platform default" (DEFAULT_EMBEDDING_MODEL env var).
+    embedding_model: str | None = Field(default=None, max_length=100)
+
     # Provider credentials — Fernet-encrypted JSON blob.
     # Stores e.g. {"api_key": "sk-..."} as ciphertext.
     # NULL means "use platform default credentials".
@@ -37,16 +41,20 @@ class BotProfileCreate(SQLModel):
     name: str = Field(max_length=255)
     description: str = Field(default="", max_length=1000)
     model: str = Field(default="gpt-4o-mini", max_length=100)
+    embedding_model: str | None = Field(default=None, max_length=100)
     system_prompt: str = Field(default="You are a helpful assistant.")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     max_tokens: int = Field(default=1024, ge=1, le=128000)
-    credentials: dict | None = Field(default=None, description="Provider credentials (encrypted at rest)")
+    credentials: dict | None = Field(
+        default=None, description="Provider credentials (encrypted at rest)",
+    )
 
 
 class BotProfileUpdate(SQLModel):
     name: str | None = Field(default=None, max_length=255)
     description: str | None = Field(default=None, max_length=1000)
     model: str | None = Field(default=None, max_length=100)
+    embedding_model: str | None = Field(default=None, max_length=100)
     system_prompt: str | None = None
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     max_tokens: int | None = Field(default=None, ge=1, le=128000)
@@ -60,6 +68,7 @@ class BotProfileRead(SQLModel):
     name: str
     description: str
     model: str
+    embedding_model: str | None
     system_prompt: str
     temperature: float
     max_tokens: int

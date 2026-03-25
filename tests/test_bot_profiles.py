@@ -92,6 +92,40 @@ async def test_delete_bot_profile(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_embedding_model_crud(client: AsyncClient):
+    """Create, read, and update embedding_model on a bot profile."""
+    ctx = await _bootstrap(client, "bp-embed")
+    headers = ctx["headers"]
+
+    # Create with embedding_model
+    resp = await client.post("/v1/bot-profiles", json={
+        "name": "Gemini Bot",
+        "embedding_model": "gemini/text-embedding-004",
+    }, headers=headers)
+    assert resp.status_code == 201
+    bp = resp.json()
+    assert bp["embedding_model"] == "gemini/text-embedding-004"
+
+    # Read it back
+    resp = await client.get(f"/v1/bot-profiles/{bp['id']}", headers=headers)
+    assert resp.json()["embedding_model"] == "gemini/text-embedding-004"
+
+    # Update to a different model
+    resp = await client.patch(f"/v1/bot-profiles/{bp['id']}", json={
+        "embedding_model": "text-embedding-3-small",
+    }, headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["embedding_model"] == "text-embedding-3-small"
+
+    # Create without embedding_model → null
+    resp = await client.post("/v1/bot-profiles", json={
+        "name": "Default Bot",
+    }, headers=headers)
+    assert resp.status_code == 201
+    assert resp.json()["embedding_model"] is None
+
+
+@pytest.mark.asyncio
 async def test_tenant_isolation_bot_profiles(client: AsyncClient):
     """Tenant A cannot see Tenant B's bot profiles."""
     ctx_a = await _bootstrap(client, "bp-iso-a")

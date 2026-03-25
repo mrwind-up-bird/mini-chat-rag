@@ -68,6 +68,7 @@ async def run_chat_turn(
     top_k: int = DEFAULT_TOP_K,
     api_key: str | None = None,
     extra_chunks: list[RetrievedChunk] | None = None,
+    embedding_model: str | None = None,
 ) -> ChatResponse:
     """Execute one chat turn through the RAG pipeline.
 
@@ -84,7 +85,9 @@ async def run_chat_turn(
         ChatResponse with the assistant's reply and usage stats.
     """
     # 1. Embed the user query
-    query_vectors = await embed_texts([user_message], api_key=api_key)
+    query_vectors = await embed_texts(
+        [user_message], model=embedding_model, api_key=api_key,
+    )
     query_vector = query_vectors[0] if query_vectors else []
 
     # 2. Retrieve relevant chunks from Qdrant
@@ -154,6 +157,7 @@ async def run_chat_turn_stream(
     top_k: int = DEFAULT_TOP_K,
     api_key: str | None = None,
     extra_chunks: list[RetrievedChunk] | None = None,
+    embedding_model: str | None = None,
 ) -> AsyncGenerator[StreamEvent | ChatResponse, None]:
     """Execute a streaming chat turn through the RAG pipeline.
 
@@ -161,7 +165,9 @@ async def run_chat_turn_stream(
     a ChatResponse with the complete accumulated result for the route to persist.
     """
     # 1. Embed + retrieve (same as non-streaming)
-    query_vectors = await embed_texts([user_message], api_key=api_key)
+    query_vectors = await embed_texts(
+        [user_message], model=embedding_model, api_key=api_key,
+    )
     query_vector = query_vectors[0] if query_vectors else []
 
     retrieved: list[RetrievedChunk] = []

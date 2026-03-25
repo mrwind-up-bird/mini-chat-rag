@@ -138,6 +138,58 @@ async def test_ingest_empty_content(client: AsyncClient, test_session_factory):
 
 
 @pytest.mark.asyncio
+async def test_ingest_uses_bot_embedding_model(client: AsyncClient, test_session_factory):
+    """Ingest should pass the bot profile's embedding_model and credentials to embed_texts."""
+    resp = await client.post("/v1/tenants", json={
+        "tenant_name": "Embed Co",
+        "tenant_slug": "ingest-embed",
+        "owner_email": "embed@test.com",
+        "owner_password": "password1234",
+    })
+    data = resp.json()
+    headers = {"Authorization": f"Bearer {data['api_token']}"}
+    tenant_id = data["tenant"]["id"]
+
+    # Create bot with custom embedding_model
+    resp = await client.post("/v1/bot-profiles", json={
+        "name": "Gemini Bot",
+        "embedding_model": "gemini/text-embedding-004",
+    }, headers=headers)
+    profile_id = resp.json()["id"]
+
+    resp = await client.post("/v1/sources", json={
+        "bot_profile_id": profile_id,
+        "name": "Test KB",
+        "source_type": "text",
+        "content": "Some content for embedding model test.",
+    }, headers=headers)
+    source_id = resp.json()["id"]
+
+    mock_embed = AsyncMock(side_effect=lambda texts, **kw: _mock_embedding(len(texts)))
+    mock_ensure = AsyncMock()
+    mock_upsert = AsyncMock()
+    mock_delete = AsyncMock()
+
+    with (
+        patch("app.workers.ingest.async_session_factory", test_session_factory),
+        patch("app.workers.ingest.embed_texts", mock_embed),
+        patch("app.workers.ingest.ensure_collection", mock_ensure),
+        patch("app.workers.ingest.upsert_chunks", mock_upsert),
+        patch("app.workers.ingest.delete_by_source", mock_delete),
+    ):
+        result = await ingest_source({}, source_id=source_id, tenant_id=tenant_id)
+
+    assert "error" not in result
+    # Verify embedding model was passed
+    mock_embed.assert_called_once()
+    call_kwargs = mock_embed.call_args[1]
+    assert call_kwargs["model"] == "gemini/text-embedding-004"
+    # Verify ensure_collection was called with the model
+    mock_ensure.assert_called_once()
+    assert mock_ensure.call_args[1]["embedding_model"] == "gemini/text-embedding-004"
+
+
+@pytest.mark.asyncio
 async def test_ingest_trigger_endpoint(client: AsyncClient):
     """POST /v1/sources/{id}/ingest should attempt to enqueue (mocked Redis)."""
     ctx = await _setup_source(client, "ingest-trigger")

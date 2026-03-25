@@ -13,6 +13,7 @@ from sqlmodel import select
 from app.core.database import async_session_factory
 from app.core.security import decrypt_value
 from app.models.base import utcnow
+from app.models.bot_profile import BotProfile
 from app.models.chunk import Chunk
 from app.models.document import Document
 from app.models.source import Source, SourceStatus, SourceType
@@ -58,6 +59,11 @@ async def ingest_source(ctx: dict, source_id: str, tenant_id: str) -> dict:
                 result = await _validate_nyxcore(session, source)
                 return result
 
+            # Load bot profile for embedding config + credentials
+            api_key, embedding_model = await _get_bot_embedding_config(
+                session, source.bot_profile_id,
+            )
+
             # 1. Extract raw content
             raw_content = await _extract_content(source)
             if not raw_content:
@@ -87,10 +93,12 @@ async def ingest_source(ctx: dict, source_id: str, tenant_id: str) -> dict:
 
             # 4. Embed all chunk texts
             texts = [c.content for c in chunks]
-            embeddings = await embed_texts(texts)
+            embeddings = await embed_texts(
+                texts, model=embedding_model, api_key=api_key,
+            )
 
             # 5. Ensure Qdrant collection exists
-            await ensure_collection()
+            await ensure_collection(embedding_model=embedding_model)
 
             # 6. Delete old vectors for this source (re-ingestion)
             await delete_by_source(tenant_id, source_id)
@@ -185,6 +193,29 @@ async def ingest_source(ctx: dict, source_id: str, tenant_id: str) -> dict:
                 logger.warning("Webhook dispatch failed after error for source %s", source_id)
 
             return {"error": str(exc)}
+
+
+async def _get_bot_embedding_config(
+    session: AsyncSession,
+    bot_profile_id: uuid.UUID,
+) -> tuple[str | None, str | None]:
+    """Load the bot profile's API key and embedding model.
+
+    Returns:
+        (api_key, embedding_model) — either may be None to use defaults.
+    """
+    stmt = select(BotProfile).where(BotProfile.id == bot_profile_id)
+    result = await session.execute(stmt)
+    bot = result.scalar_one_or_none()
+    if bot is None:
+        return None, None
+
+    api_key = None
+    if bot.encrypted_credentials:
+        creds = json.loads(decrypt_value(bot.encrypted_credentials))
+        api_key = creds.get("api_key")
+
+    return api_key, bot.embedding_model
 
 
 async def _extract_content(source: Source) -> str:

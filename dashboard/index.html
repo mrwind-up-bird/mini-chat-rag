@@ -227,14 +227,38 @@
                   <input x-model="form.description" class="form-input">
                 </div>
                 <div>
-                  <label class="form-label">Model</label>
+                  <label class="form-label">Chat Model</label>
                   <select x-model="form.model" class="form-input">
-                    <option value="gpt-4o-mini">gpt-4o-mini</option>
-                    <option value="gpt-4o">gpt-4o</option>
-                    <option value="claude-sonnet-4-5-20250929">claude-sonnet-4-5</option>
-                    <option value="claude-haiku-4-5-20251001">claude-haiku-4-5</option>
-                    <option value="gemini/gemini-2.0-flash">gemini-2.0-flash</option>
+                    <optgroup label="OpenAI">
+                      <option value="gpt-4o-mini">gpt-4o-mini</option>
+                      <option value="gpt-4o">gpt-4o</option>
+                    </optgroup>
+                    <optgroup label="Anthropic">
+                      <option value="claude-sonnet-4-5-20250929">claude-sonnet-4-5</option>
+                      <option value="claude-haiku-4-5-20251001">claude-haiku-4-5</option>
+                    </optgroup>
+                    <optgroup label="Google">
+                      <option value="gemini/gemini-2.0-flash">gemini-2.0-flash</option>
+                    </optgroup>
                   </select>
+                </div>
+                <div>
+                  <label class="form-label">Embedding Model <span class="text-xs opacity-60">(for ingestion &amp; search)</span></label>
+                  <select x-model="form.embedding_model" class="form-input">
+                    <option value="">Platform default (text-embedding-3-small)</option>
+                    <optgroup label="OpenAI — requires OPENAI_API_KEY">
+                      <option value="text-embedding-3-small">text-embedding-3-small — $0.02/1M, 1536d</option>
+                      <option value="text-embedding-3-large">text-embedding-3-large — $0.13/1M, 3072d</option>
+                    </optgroup>
+                    <optgroup label="Google — requires GEMINI_API_KEY">
+                      <option value="gemini/text-embedding-004">text-embedding-004 — free tier, 768d</option>
+                    </optgroup>
+                    <optgroup label="Cohere — requires COHERE_API_KEY">
+                      <option value="cohere/embed-english-v3.0">embed-english-v3.0 — $0.10/1M, 1024d</option>
+                      <option value="cohere/embed-multilingual-v3.0">embed-multilingual-v3.0 — $0.10/1M, 1024d</option>
+                    </optgroup>
+                  </select>
+                  <p class="text-xs mt-1 opacity-50" x-show="editingBot">Changing embedding model requires re-ingesting all sources for this bot.</p>
                 </div>
                 <div>
                   <label class="form-label">System Prompt</label>
@@ -251,8 +275,12 @@
                   </div>
                 </div>
                 <div>
-                  <label class="form-label">API Key (optional, encrypted at rest)</label>
-                  <input x-model="form.credentials.api_key" class="form-input" type="password" placeholder="sk-...">
+                  <label class="form-label">API Key <span class="text-xs opacity-60">(encrypted at rest)</span></label>
+                  <input x-model="form.credentials.api_key" class="form-input" type="password"
+                         :placeholder="form.model.startsWith('gemini/') || (form.embedding_model || '').startsWith('gemini/') ? 'AIza...' :
+                                       form.model.startsWith('claude') ? 'sk-ant-...' :
+                                       (form.embedding_model || '').startsWith('cohere/') ? 'co-...' : 'sk-...'">
+                  <p class="text-xs mt-1 opacity-50">Required if using a non-default provider. Set the key matching your chat/embedding model provider.</p>
                 </div>
                 <div class="flex justify-end gap-2 pt-2">
                   <button type="button" @click="closeForm()" class="btn-secondary">Cancel</button>
@@ -1293,7 +1321,7 @@
         showCreate: false,
         editingBot: null,
         saving: false,
-        form: { name: '', description: '', model: 'gpt-4o-mini', system_prompt: '', temperature: 0.7, max_tokens: null, credentials: {} },
+        form: { name: '', description: '', model: 'gpt-4o-mini', embedding_model: '', system_prompt: '', temperature: 0.7, max_tokens: null, credentials: {} },
         tryingBot: null,
         tryChatId: null,
         tryMessages: [],
@@ -1319,6 +1347,7 @@
             name: bot.name,
             description: bot.description || '',
             model: bot.model,
+            embedding_model: bot.embedding_model || '',
             system_prompt: bot.system_prompt || '',
             temperature: bot.temperature,
             max_tokens: bot.max_tokens,
@@ -1329,7 +1358,7 @@
         closeForm() {
           this.showCreate = false;
           this.editingBot = null;
-          this.form = { name: '', description: '', model: 'gpt-4o-mini', system_prompt: '', temperature: 0.7, max_tokens: null, credentials: {} };
+          this.form = { name: '', description: '', model: 'gpt-4o-mini', embedding_model: '', system_prompt: '', temperature: 0.7, max_tokens: null, credentials: {} };
         },
 
         async saveBot() {
@@ -1338,6 +1367,7 @@
             const data = { ...this.form };
             if (!data.credentials?.api_key) delete data.credentials;
             if (!data.max_tokens) delete data.max_tokens;
+            if (!data.embedding_model) data.embedding_model = null;
 
             if (this.editingBot) {
               await API.updateBotProfile(this.editingBot.id, data);
