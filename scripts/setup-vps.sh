@@ -40,7 +40,10 @@ fi
 echo "==> Generating secrets and creating .env..."
 FERNET_KEY=$(docker run --rm python:3.11-slim python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null || echo "GENERATE_ME")
 JWT_SECRET=$(openssl rand -hex 32)
-PG_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/')
+    # Validate SUDO_USER contains only safe characters (alphanumeric, dash, underscore)
+    if [[ "$SUDO_USER" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        usermod -aG docker "$SUDO_USER"
+    fi
 
 cat > /opt/minirag/.env <<EOF
 # ── Domain ────────────────────────────────────────────────
