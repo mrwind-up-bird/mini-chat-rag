@@ -510,8 +510,8 @@
                   </div>
                   <div>
                     <label class="form-label">API Token <span class="text-xs opacity-60">(nyx_ax_...)</span></label>
-                    <input x-model="form.config.api_token" type="password" class="form-input" required
-                           placeholder="nyx_ax_...">
+                    <input x-model="form.config.api_token" type="password" class="form-input"
+                           :required="form.source_type === 'nyxcore'" placeholder="nyx_ax_...">
                   </div>
                   <div>
                     <label class="form-label">Result Limit</label>
