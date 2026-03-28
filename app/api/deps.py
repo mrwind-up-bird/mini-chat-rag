@@ -72,10 +72,14 @@ async def _resolve_api_token(
     # Update last_used_at (fire-and-forget, non-blocking)
     api_token.last_used_at = utcnow()
     session.add(api_token)
-    await session.commit()
-
-    return AuthContext(
-        tenant_id=api_token.tenant_id,
+    # Update last_used_at in separate transaction to avoid race conditions
+    try:
+        api_token.last_used_at = utcnow()
+        session.add(api_token)
+        await session.commit()
+    except Exception:
+        # Silently ignore last_used_at update failures to avoid breaking auth
+        await session.rollback()
         user_id=api_token.user_id,
         user_role=user.role,
         token_id=api_token.id,
