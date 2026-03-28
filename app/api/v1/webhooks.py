@@ -1,10 +1,12 @@
 """Webhook CRUD — all queries scoped to tenant_id."""
 
+import ipaddress
 import hashlib
 import hmac
 import json
 import secrets
 import uuid
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, HTTPException, status
@@ -34,6 +36,33 @@ def _to_read(wh: Webhook) -> WebhookRead:
         description=wh.description,
         has_secret=bool(wh.secret),
         created_at=wh.created_at,
+def _validate_webhook_url(url: str) -> None:
+    """Validate webhook URL to prevent SSRF attacks."""
+    try:
+        parsed = urlparse(url)
+        if not parsed.scheme or parsed.scheme not in ('http', 'https'):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="URL must use http or https scheme"
+            )
+        
+        # Check for internal/private IP addresses
+        ip = ipaddress.ip_address(parsed.hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Webhook URL cannot target internal networks, localhost, or private IP ranges"
+            )
+    except ValueError:
+        # hostname is not an IP, allow domain names (they resolve externally)
+        pass
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Invalid webhook URL format"
+        )
+
+
         updated_at=wh.updated_at,
     )
 
@@ -41,6 +70,9 @@ def _to_read(wh: Webhook) -> WebhookRead:
 class TestPingResponse(BaseModel):
     success: bool
     status_code: int | None = None
+    # Validate webhook URL for SSRF prevention
+    _validate_webhook_url(body.url)
+
 
 
 @router.post("", response_model=WebhookCreated, status_code=status.HTTP_201_CREATED)
