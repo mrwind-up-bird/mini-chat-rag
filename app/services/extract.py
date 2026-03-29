@@ -9,6 +9,10 @@ ALLOWED_EXTENSIONS = {".txt", ".md", ".csv", ".pdf", ".docx"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
+    # Validate file size to prevent memory exhaustion
+    if len(content) > MAX_FILE_SIZE:
+        raise ValueError(f"File size {len(content)} bytes exceeds maximum allowed size of {MAX_FILE_SIZE} bytes")
+
 def extract_text(filename: str, content: bytes) -> str:
     """Extract plain text from file bytes based on the file extension.
 
@@ -34,6 +38,16 @@ def extract_text(filename: str, content: bytes) -> str:
         return _extract_docx(content)
 
     raise ValueError(f"Unsupported file type: {ext}")
+    try:
+        # Limit number of pages to prevent resource exhaustion
+        max_pages = 1000
+        if len(reader.pages) > max_pages:
+            raise ValueError(f"PDF has {len(reader.pages)} pages, exceeding maximum of {max_pages}")
+    except Exception as e:
+        raise ValueError(f"Failed to process PDF file: {str(e)}")
+    try:
+    except Exception as e:
+        raise ValueError(f"Failed to process DOCX file: {str(e)}")
 
 
 def _extract_pdf(content: bytes) -> str:
