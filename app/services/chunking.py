@@ -5,6 +5,11 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass
+# Default chunking configuration constants
+DEFAULT_CHUNK_SIZE = 512
+DEFAULT_CHUNK_OVERLAP = 64
+
+
 
 
 @dataclass
@@ -42,8 +47,8 @@ _SEPARATORS = [
     " ",      # word boundaries
     "",       # character-level fallback
 ]
-
-
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
 def chunk_text(
     text: str,
     chunk_size: int = 512,
