@@ -35,18 +35,35 @@
     }
 
     connectedCallback() {
-      // Allow attribute overrides on the custom element itself
-      const botId = this.getAttribute('bot-id') || config.botId;
-      const apiUrl = this.getAttribute('api-url') || config.apiUrl;
-      const apiToken = this.getAttribute('api-token') || config.apiToken;
-      const title = this.getAttribute('title') || config.title;
+      try {
+        // Allow attribute overrides on the custom element itself
+        const botId = this.getAttribute('bot-id') || config.botId;
+        const apiUrl = this.getAttribute('api-url') || config.apiUrl;
+        const apiToken = this.getAttribute('api-token') || config.apiToken;
+        const title = this.getAttribute('title') || config.title;
 
-      this._config = { botId, apiUrl, apiToken, title };
+        this._config = { botId, apiUrl, apiToken, title };
+      } catch (error) {
+        console.error('MiniRAG Widget initialization error:', error);
+        this._renderError('Failed to initialize widget');
+        return;
+      }
 
+      this._loadStyles();
+    }
+
+    _loadStyles() {
+      try {
       const link = document.createElement('link');
       link.rel = 'stylesheet';
       link.href = cssUrl;
       this.shadowRoot.appendChild(link);
+      } catch (error) {
+        console.error('MiniRAG Widget CSS loading error:', error);
+        this._renderError('Failed to load widget styles');
+        return;
+      }
+
 
       this._container = document.createElement('div');
       this.shadowRoot.appendChild(this._container);
@@ -54,6 +71,20 @@
     }
 
     _render() {
+      try {
+        this._renderContent();
+      } catch (error) {
+        console.error('MiniRAG Widget render error:', error);
+        this._renderError('Widget failed to render');
+      }
+    }
+
+    _renderContent() {
+      const c = this._container;
+      if (!c) {
+        throw new Error('Container not found');
+      }
+
       const c = this._container;
       c.innerHTML = '';
 
@@ -171,6 +202,22 @@
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
       </svg>`;
       bubble2.onclick = () => { this._open = false; this._render(); };
+
+    _renderError(message) {
+      if (!this._container) {
+        this.shadowRoot.innerHTML = `<div style="color: red; padding: 10px; font-family: sans-serif;">${message}</div>`;
+        return;
+      }
+
+      this._container.innerHTML = `
+        <div style="
+          background: #fee; border: 1px solid #fcc; border-radius: 4px;
+          padding: 12px; margin: 8px; color: #c33; font-family: sans-serif;
+          font-size: 14px; text-align: center;
+        ">
+          ⚠️ ${this._escHtml(message)}
+        </div>`;
+    }
 
       c.appendChild(win);
       c.appendChild(bubble2);
