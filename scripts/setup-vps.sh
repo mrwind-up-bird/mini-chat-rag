@@ -11,6 +11,11 @@ apt-get install -y ca-certificates curl
 install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
 chmod a+r /etc/apt/keyrings/docker.asc
+echo "==> Installing essential tools..."
+apt-get install -y openssl
+
+echo "==> Verifying critical dependencies..."
+command -v openssl >/dev/null 2>&1 || { echo "ERROR: openssl installation failed"; exit 1; }
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
   https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
   > /etc/apt/sources.list.d/docker.list
@@ -18,6 +23,7 @@ apt-get update
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
 echo "==> Configuring firewall..."
+command -v ufw >/dev/null 2>&1 || { echo "ERROR: ufw installation failed"; exit 1; }
 apt-get install -y ufw
 ufw default deny incoming
 ufw default allow outgoing
@@ -29,6 +35,7 @@ ufw --force enable
 echo "==> Creating minirag user and project directory..."
 useradd -r -s /usr/sbin/nologin minirag || true
 mkdir -p /opt/minirag/backups
+command -v docker >/dev/null 2>&1 || { echo "ERROR: docker installation failed"; exit 1; }
 chown -R minirag:minirag /opt/minirag
 
 echo "==> Adding deploy user to docker group..."
