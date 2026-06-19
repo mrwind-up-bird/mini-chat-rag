@@ -320,52 +320,45 @@ async def _get_bot_sources(session, tenant_id) -> list[BotSourceInfo]:
         )
         bots = (await session.execute(bot_stmt)).scalars().all()
 
-        result = []
-        for bot in bots:
-            # Count sources and their statuses
+        # Get all bots with aggregated source statistics in a single query
+        from sqlalchemy import case
+        
+        bot_stats_stmt = (
+            select(
+                BotProfile.id,
+                BotProfile.name,
+                BotProfile.model,
+                BotProfile.is_active,
+                func.count(Source.id).label('source_count'),
+                func.sum(
+                    case(
+                        (Source.status == SourceStatus.READY, 1),
+                        else_=0
+                    )
+                ).label('ready_sources'),
+                func.coalesce(func.sum(Source.chunk_count), 0).label('total_chunks')
+            )
+            .select_from(BotProfile)
+            .outerjoin(
+                Source,
+                (Source.bot_profile_id == BotProfile.id) &
+                (Source.tenant_id == tenant_id) &
+                (Source.is_active == True)  # noqa: E712
+            )
+            .group_by(BotProfile.id, BotProfile.name, BotProfile.model, BotProfile.is_active)
+        
+        bot_stats = (await session.execute(bot_stats_stmt)).all()
+        for row in bot_stats:
+                bot_profile_id=str(row.id),
+                bot_name=row.name,
+                model=row.model,
+                is_active=row.is_active,
+                source_count=row.source_count or 0,
+                ready_sources=row.ready_sources or 0,
+                total_chunks=row.total_chunks or 0,
             src_stmt = (
                 select(func.count())
                 .select_from(Source)
-                .where(
                     Source.tenant_id == tenant_id,
                     Source.bot_profile_id == bot.id,
-                    Source.is_active == True,  # noqa: E712
-                )
-            )
-            source_count = (await session.execute(src_stmt)).scalar_one()
-
-            ready_stmt = (
-                select(func.count())
-                .select_from(Source)
-                .where(
-                    Source.tenant_id == tenant_id,
-                    Source.bot_profile_id == bot.id,
-                    Source.is_active == True,  # noqa: E712
-                    Source.status == SourceStatus.READY,
-                )
-            )
-            ready_count = (await session.execute(ready_stmt)).scalar_one()
-
-            chunk_stmt = (
-                select(func.coalesce(func.sum(Source.chunk_count), 0))
-                .where(
-                    Source.tenant_id == tenant_id,
-                    Source.bot_profile_id == bot.id,
-                    Source.is_active == True,  # noqa: E712
-                )
-            )
-            total_chunks = (await session.execute(chunk_stmt)).scalar_one()
-
-            result.append(BotSourceInfo(
-                bot_profile_id=str(bot.id),
-                bot_name=bot.name,
-                model=bot.model,
-                is_active=bot.is_active,
-                source_count=source_count,
-                ready_sources=ready_count,
-                total_chunks=total_chunks,
             ))
-
-        return result
-    except Exception:
-        return []
