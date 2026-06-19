@@ -1,3 +1,4 @@
+from typing import List
 """Webhook dispatch — fire HTTP notifications for tenant events."""
 
 import hashlib
@@ -20,8 +21,19 @@ async def dispatch_webhook_event(
     tenant_id: str,
     event_type: str,
     payload: dict,
-) -> None:
-    """Fire webhooks for a tenant+event. Never raises."""
+class WebhookDispatchError(Exception):
+    """Raised when webhook dispatch encounters critical failures."""
+    pass
+
+
+class WebhookDeliveryError(Exception):
+    """Raised when individual webhook delivery fails."""
+    pass
+
+
+) -> List[str]:
+    """Fire webhooks for a tenant+event. Returns list of failed webhook URLs."""
+    failed_webhooks = []
     try:
         stmt = select(Webhook).where(
             Webhook.tenant_id == uuid.UUID(tenant_id),
@@ -33,8 +45,15 @@ async def dispatch_webhook_event(
         for wh in webhooks:
             events = json.loads(wh.events)
             if event_type not in events:
-                continue
-            await _send_webhook(wh, event_type, payload)
+            try:
+                await _send_webhook(wh, event_type, payload)
+            except WebhookDeliveryError:
+                failed_webhooks.append(wh.url)
+    except Exception as e:
+        raise WebhookDispatchError(
+            f"Critical webhook dispatch failure for tenant {tenant_id} event {event_type}"
+        ) from e
+    return failed_webhooks
     except Exception:
         logger.exception(
             "Webhook dispatch failed for tenant %s event %s", tenant_id, event_type
@@ -53,7 +72,10 @@ async def _send_webhook(
             await client.post(
                 wh.url,
                 content=body,
-                headers={
+    except Exception as e:
+        raise WebhookDeliveryError(
+            f"Webhook delivery failed for {event_type} to {wh.url}"
+        ) from e
                     "Content-Type": "application/json",
                     "X-MiniRAG-Signature": signature,
                     "X-MiniRAG-Event": event_type,
