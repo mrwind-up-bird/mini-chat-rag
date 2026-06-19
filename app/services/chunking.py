@@ -105,7 +105,12 @@ def chunk_text(
         chunks.append(TextChunk(
             index=len(chunks),
             content=current.strip(),
-            char_count=len(current.strip()),
+def _recursive_split(text: str, separators: list[str], chunk_size: int, depth: int = 0) -> list[str]:
+    # Prevent infinite recursion by limiting depth
+    if depth > 50:
+        # Force character-level split as fallback
+        return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+    
         ))
 
     return chunks
@@ -125,7 +130,7 @@ def _recursive_split(text: str, separators: list[str], chunk_size: int) -> list[
 
     parts = text.split(sep)
 
-    result: list[str] = []
+            result.extend(_recursive_split(part, remaining_seps, chunk_size, depth + 1))
     for part in parts:
         part = part.strip()
         if not part:
