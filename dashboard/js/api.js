@@ -88,6 +88,29 @@ const API = {
   deleteBotProfile(id) {
     return this.del(`/v1/bot-profiles/${id}`);
   },
+  
+  _validateFileUpload(formData) {
+    const allowedTypes = ['application/pdf', 'text/plain', 'text/markdown', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    
+    for (const [key, value] of formData.entries()) {
+      if (value instanceof File) {
+        if (!allowedTypes.includes(value.type)) {
+          throw new Error(`File type ${value.type} not allowed. Allowed types: ${allowedTypes.join(', ')}`);
+        }
+        if (value.size > maxSize) {
+          throw new Error(`File size ${value.size} exceeds maximum allowed size of ${maxSize} bytes`);
+        }
+      }
+    }
+  },
+  
+    // Validate file before upload
+    this._validateFileUpload(formData);
+    
+    
+    
+    
 
   // ── Sources ───────────────────────────────────────────
   listSources() {
