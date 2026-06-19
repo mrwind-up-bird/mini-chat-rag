@@ -174,7 +174,21 @@ const API = {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
-      });
+    // Ensure reader is properly closed on any exit path
+    const cleanup = () => {
+      reader.releaseLock();
+    };
+
+        let readResult;
+        try {
+          readResult = await reader.read();
+        } catch (readErr) {
+          cleanup();
+          onError?.(readErr.message || 'Stream read error');
+          return;
+        }
+
+        const { done, value } = readResult;
     } catch (err) {
       onError?.(err.message || 'Network error');
       return;
@@ -192,6 +206,11 @@ const API = {
       onError?.(data.detail || `HTTP ${resp.status}`);
       return;
     }
+          } catch (parseErr) {
+            // Log parse error but continue processing other events
+            console.warn('Failed to parse SSE data:', dataStr, parseErr);
+            continue;
+          }
 
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
@@ -211,9 +230,9 @@ const API = {
         for (const part of parts) {
           if (!part.trim()) continue;
 
-          let eventType = 'message';
-          let dataStr = '';
-
+      cleanup();
+      cleanup();
+      return;
           for (const line of part.split('\n')) {
             if (line.startsWith('event: ')) {
               eventType = line.slice(7);
