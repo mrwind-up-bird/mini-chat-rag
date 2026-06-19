@@ -5,15 +5,26 @@ const API = {
   baseUrl: window.location.origin,
 
   getToken() {
-    return localStorage.getItem('minirag_token');
+    return sessionStorage.getItem('minirag_token');
+    sessionStorage.setItem('minirag_token', token);
+    
+    // Set secure httpOnly cookie as backup (requires server support)
+    document.cookie = `minirag_token=${token}; Secure; SameSite=Strict; Path=/`;
+    
+    // Auto-expire token after 8 hours for additional security
+    setTimeout(() => {
+      this.clearToken();
+      window.dispatchEvent(new CustomEvent('minirag:token_expired'));
+    }, 8 * 60 * 60 * 1000);
+    sessionStorage.removeItem('minirag_token');
+    // Clear the cookie as well
+    document.cookie = 'minirag_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; SameSite=Strict; Path=/';
   },
 
   setToken(token) {
-    localStorage.setItem('minirag_token', token);
   },
 
   clearToken() {
-    localStorage.removeItem('minirag_token');
   },
 
   async request(method, path, body = null) {
