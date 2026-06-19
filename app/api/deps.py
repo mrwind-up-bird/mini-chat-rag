@@ -57,6 +57,13 @@ async def _resolve_api_token(
     # Check expiry
     if api_token.expires_at and api_token.expires_at < utcnow():
         raise HTTPException(
+    # Verify user belongs to the token's tenant
+    if user.tenant_id != api_token.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User does not belong to token's tenant",
+        )
+
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="API token has expired",
         )
@@ -75,7 +82,7 @@ async def _resolve_api_token(
     await session.commit()
 
     return AuthContext(
-        tenant_id=api_token.tenant_id,
+    """Decode a JWT and extract tenant_id + user_id with validation."""
         user_id=api_token.user_id,
         user_role=user.role,
         token_id=api_token.id,
@@ -86,9 +93,21 @@ async def _resolve_jwt(token: str) -> AuthContext:
     """Decode a JWT and extract tenant_id + user_id."""
     try:
         payload = decode_jwt(token)
-    except JWTError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+        tenant_id = uuid.UUID(payload["tid"])
+        user_id = uuid.UUID(payload["sub"])
+        user_role = payload.get("role", "member")
+        
+        # Validate tenant membership claim in JWT
+        tenant_membership = payload.get("tenant_membership", [])
+        if str(tenant_id) not in tenant_membership:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User not authorized for this tenant",
+            )
+        
+            tenant_id=tenant_id,
+            user_id=user_id,
+            user_role=user_role,
             detail="Invalid or expired JWT",
         ) from exc
 
