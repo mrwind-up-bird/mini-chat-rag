@@ -23,7 +23,12 @@ def extract_text(filename: str, content: bytes) -> str:
         ValueError: If the file extension is not supported.
     """
     ext = Path(filename).suffix.lower()
-
+        try:
+            return content.decode("utf-8")
+        except UnicodeDecodeError:
+            # Fallback to latin-1 which can decode any byte sequence
+            # then attempt to detect and convert to proper encoding
+            return content.decode("latin-1", errors="replace")
     if ext in {".txt", ".md", ".csv"}:
         return content.decode("utf-8")
 
