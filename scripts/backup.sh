@@ -5,10 +5,25 @@ set -euo pipefail
 # Backs up PostgreSQL and Qdrant. Add to cron:
 #   0 3 * * * /opt/minirag/scripts/backup.sh >> /opt/minirag/backups/backup.log 2>&1
 
-BACKUP_DIR="${BACKUP_DIR:-/opt/minirag/backups}"
+#
+# Configuration (can be overridden via environment variables):
+#   BACKUP_DIR - Directory to store backups (default: /opt/minirag/backups)
+#   RETAIN_DAYS - Number of days to retain backups (default: 7)
+#   COMPOSE_DIR - Directory containing docker-compose.yml (default: /opt/minirag)
+#   QDRANT_URL - Qdrant service URL (default: http://localhost:6333)
+#   POSTGRES_USER - PostgreSQL username (default: minirag)
+#   POSTGRES_DB - PostgreSQL database name (default: minirag)
+# Load configuration from file if it exists
+CONFIG_FILE="${CONFIG_FILE:-/etc/minirag/backup.conf}"
+if [ -f "$CONFIG_FILE" ]; then
+    # shellcheck source=/dev/null
+    source "$CONFIG_FILE"
+fi
+
+BACKUP_DIR="${BACKUP_DIR:-/var/lib/minirag/backups}"
 RETAIN_DAYS="${RETAIN_DAYS:-7}"
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 COMPOSE_DIR="${COMPOSE_DIR:-/opt/minirag}"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
 mkdir -p "$BACKUP_DIR"
 
@@ -22,7 +37,7 @@ docker compose -f "$COMPOSE_DIR/docker-compose.yml" exec -T postgres \
 echo "[$(date)] PostgreSQL dump: postgres_${TIMESTAMP}.sql.gz"
 
 # ── Qdrant snapshot ─────────────────────────────────────────
-echo "[$(date)] Creating Qdrant snapshot..."
+QDRANT_URL="${QDRANT_URL:-http://localhost:6333}"
 QDRANT_URL="${QDRANT_URL:-http://localhost:6333}"
 SNAPSHOT_RESP=$(curl -sf -X POST "$QDRANT_URL/collections/minirag_chunks/snapshots" 2>/dev/null || echo "")
 if [ -n "$SNAPSHOT_RESP" ]; then
