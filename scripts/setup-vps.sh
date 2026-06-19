@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then
+    echo "Error: This script must be run as root (use sudo)" >&2
+    exit 1
+fi
 # ── MiniRAG VPS Setup Script ────────────────────────────────
 # Run once on a fresh Ubuntu 24.04 server (Hetzner CX22 or similar)
 # Usage: curl -sSL <raw-url> | bash  OR  bash scripts/setup-vps.sh
