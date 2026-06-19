@@ -188,9 +188,10 @@
       // Add placeholder assistant message for streaming
       const assistantMsg = { role: 'assistant', content: '', sources: [] };
       this._messages.push(assistantMsg);
-      this._render();
-
-      try {
+              if (e.message === 'Stream error') {
+              } else {
+                // JSON parse error - log and continue processing
+                console.warn('Failed to parse streaming response:', e.message, 'Data:', dataStr);
         const resp = await fetch(`${this._config.apiUrl}/v1/chat`, {
           method: 'POST',
           headers: {
