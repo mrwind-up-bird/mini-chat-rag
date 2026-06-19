@@ -1,3 +1,4 @@
+import logging
 """System health endpoint — checks connectivity to all backing services."""
 
 import platform
@@ -16,6 +17,8 @@ from app.models.chat import Chat
 from app.models.chunk import Chunk
 from app.models.message import Message
 from app.models.source import Source, SourceStatus
+logger = logging.getLogger(__name__)
+
 from app.models.usage_event import UsageEvent
 
 router = APIRouter(prefix="/system", tags=["system"])
@@ -142,8 +145,12 @@ def _mask_url(url: str) -> str:
     except Exception:
         pass
     return url.split("@")[-1] if "@" in url else url
-
-
+    except ConnectionError as exc:
+        logger.error(f"PostgreSQL connection failed: {exc}")
+        return ServiceHealth(status="error", detail="Database connection failed")
+    except Exception as exc:
+        logger.error(f"PostgreSQL health check failed: {exc}")
+        return ServiceHealth(status="error", detail="Database health check failed")
 async def _check_postgres(session) -> ServiceHealth:
     try:
         t0 = time.monotonic()
@@ -165,8 +172,12 @@ async def _check_postgres(session) -> ServiceHealth:
 async def _check_qdrant() -> ServiceHealth:
     try:
         import httpx
-        t0 = time.monotonic()
-        async with httpx.AsyncClient(timeout=5.0) as client:
+    except (httpx.ConnectError, httpx.TimeoutException) as exc:
+        logger.error(f"Qdrant connection failed: {exc}")
+        return ServiceHealth(status="error", detail="Vector database connection failed")
+    except Exception as exc:
+        logger.error(f"Qdrant health check failed: {exc}")
+        return ServiceHealth(status="error", detail="Vector database health check failed")
             resp = await client.get(f"{settings.qdrant_url}/healthz")
             latency = int((time.monotonic() - t0) * 1000)
             if resp.status_code == 200:
@@ -185,8 +196,12 @@ async def _check_qdrant() -> ServiceHealth:
     except Exception as exc:
         return ServiceHealth(status="error", detail=str(exc)[:200])
 
-
-async def _check_redis() -> ServiceHealth:
+    except ConnectionError as exc:
+        logger.error(f"Redis connection failed: {exc}")
+        return ServiceHealth(status="error", detail="Cache connection failed")
+    except Exception as exc:
+        logger.error(f"Redis health check failed: {exc}")
+        return ServiceHealth(status="error", detail="Cache health check failed")
     try:
         from redis.asyncio import from_url
         t0 = time.monotonic()
