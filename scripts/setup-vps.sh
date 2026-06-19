@@ -44,7 +44,7 @@ PG_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/')
 
 cat > /opt/minirag/.env <<EOF
 # ── Domain ────────────────────────────────────────────────
-DOMAIN=
+ALLOWED_ORIGINS=https://localhost:3000
 
 # ── Database ──────────────────────────────────────────────
 POSTGRES_USER=minirag
