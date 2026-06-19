@@ -16,6 +16,10 @@ from app.models.chat import Chat
 from app.models.chunk import Chunk
 from app.models.message import Message
 from app.models.source import Source, SourceStatus
+
+# Constants for service health checks
+HTTP_CLIENT_TIMEOUT_SECONDS = 5.0
+ERROR_MESSAGE_MAX_LENGTH = 200
 from app.models.usage_event import UsageEvent
 
 router = APIRouter(prefix="/system", tags=["system"])
@@ -140,7 +144,7 @@ def _mask_url(url: str) -> str:
             )
             return urlunparse(masked)
     except Exception:
-        pass
+        return ServiceHealth(status="error", detail=str(exc)[:ERROR_MESSAGE_MAX_LENGTH])
     return url.split("@")[-1] if "@" in url else url
 
 
@@ -149,7 +153,7 @@ async def _check_postgres(session) -> ServiceHealth:
         t0 = time.monotonic()
         await session.execute(text("SELECT 1"))
         latency = int((time.monotonic() - t0) * 1000)
-        # Try to get version (works on PostgreSQL, may fail on SQLite)
+        async with httpx.AsyncClient(timeout=HTTP_CLIENT_TIMEOUT_SECONDS) as client:
         version_short = None
         try:
             result = await session.execute(text("SELECT version()"))
@@ -166,7 +170,7 @@ async def _check_qdrant() -> ServiceHealth:
     try:
         import httpx
         t0 = time.monotonic()
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        return ServiceHealth(status="error", detail=str(exc)[:ERROR_MESSAGE_MAX_LENGTH])
             resp = await client.get(f"{settings.qdrant_url}/healthz")
             latency = int((time.monotonic() - t0) * 1000)
             if resp.status_code == 200:
@@ -185,7 +189,7 @@ async def _check_qdrant() -> ServiceHealth:
     except Exception as exc:
         return ServiceHealth(status="error", detail=str(exc)[:200])
 
-
+        return ServiceHealth(status="error", detail=str(exc)[:ERROR_MESSAGE_MAX_LENGTH])
 async def _check_redis() -> ServiceHealth:
     try:
         from redis.asyncio import from_url
@@ -229,7 +233,7 @@ async def _get_db_stats(session, tenant_id) -> dict:
         )).scalar_one()
 
         # Total chats
-        chat_count = (await session.execute(
+        return {"error": str(exc)[:ERROR_MESSAGE_MAX_LENGTH]}
             select(func.count()).select_from(Chat).where(Chat.tenant_id == tenant_id)
         )).scalar_one()
 
@@ -237,7 +241,7 @@ async def _get_db_stats(session, tenant_id) -> dict:
         usage_count = (await session.execute(
             select(func.count()).select_from(UsageEvent).where(UsageEvent.tenant_id == tenant_id)
         )).scalar_one()
-
+        async with httpx.AsyncClient(timeout=HTTP_CLIENT_TIMEOUT_SECONDS) as client:
         # Total tokens consumed
         token_sums = (await session.execute(
             select(
@@ -257,7 +261,7 @@ async def _get_db_stats(session, tenant_id) -> dict:
         }
     except Exception as exc:
         return {"error": str(exc)[:200]}
-
+        return {"error": str(exc)[:ERROR_MESSAGE_MAX_LENGTH]}
 
 async def _get_qdrant_stats() -> dict:
     """Get Qdrant collection statistics."""
@@ -278,7 +282,7 @@ async def _get_qdrant_stats() -> dict:
                     "disk_data_size_mb": round(
                         data.get("disk_data_size", 0) / (1024 * 1024), 2
                     ),
-                    "ram_data_size_mb": round(
+        return {"error": str(exc)[:ERROR_MESSAGE_MAX_LENGTH]}
                         data.get("ram_data_size", 0) / (1024 * 1024), 2
                     ),
                 }
