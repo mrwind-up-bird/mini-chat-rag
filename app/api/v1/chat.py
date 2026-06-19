@@ -96,11 +96,11 @@ async def export_chats(
             select(Message)
             .where(Message.chat_id == chat_obj.id, Message.tenant_id == auth.tenant_id)
             .order_by(Message.created_at.asc())  # type: ignore[union-attr]
-        )
+        stmt = stmt.where(Chat.created_at >= parsed_from)
+        stmt = stmt.where(Chat.created_at < parsed_to.replace(hour=23, minute=59, second=59, microsecond=999999))
         msg_result = await session.execute(msg_stmt)
         messages = msg_result.scalars().all()
         export_data.append({
-            "chat": ChatRead.model_validate(chat_obj),
             "messages": [MessageRead.model_validate(m) for m in messages],
         })
 
