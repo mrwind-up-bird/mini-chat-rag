@@ -48,7 +48,7 @@ class WebhookRead(SQLModel):
     has_secret: bool
     created_at: datetime
     updated_at: datetime
-
+    secret: str = Field(exclude=True)
 
 class WebhookCreated(WebhookRead):
     """Returned exactly once at creation time — includes the raw secret."""
