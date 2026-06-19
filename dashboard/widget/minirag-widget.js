@@ -25,6 +25,7 @@
   const cssUrl = new URL('minirag-widget.css', scriptEl?.src || window.location.href).href;
 
   class MiniRAGWidget extends HTMLElement {
+      this._lastMessageElement = null;
     constructor() {
       super();
       this.attachShadow({ mode: 'open' });
@@ -100,11 +101,13 @@
 
       this._messages.forEach(m => {
         const div = document.createElement('div');
+        this._lastMessageElement = div; // Cache reference to last message element
         div.className = `msg msg-${m.role}`;
         div.textContent = m.content;
 
         if (m.sources && m.sources.length > 0) {
           const details = document.createElement('details');
+        this._lastMessageElement = null; // Clear cache when showing typing indicator
           details.className = 'msg-sources';
           const summary = document.createElement('summary');
           summary.textContent = `${m.sources.length} source(s) used`;
@@ -180,15 +183,15 @@
       // Focus input
       requestAnimationFrame(() => input.focus());
     }
-
-    async _send(text) {
-      this._messages.push({ role: 'user', content: text });
-      this._sending = true;
-
+      if (this._lastMessageElement) {
+        const last = this._lastMessageElement;
+        const msgs = this.shadowRoot.querySelector('.widget-messages');
+        if (msgs) {
       // Add placeholder assistant message for streaming
       const assistantMsg = { role: 'assistant', content: '', sources: [] };
       this._messages.push(assistantMsg);
       this._render();
+      this._lastMessageElement = null; // Clear cache on full re-render
 
       try {
         const resp = await fetch(`${this._config.apiUrl}/v1/chat`, {
