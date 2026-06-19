@@ -42,7 +42,7 @@
          'toast-error': $store.toast.type === 'error',
          'toast-info': $store.toast.type === 'info',
        }"
-       class="toast" x-text="$store.toast.message"></div>
+    <div class="login-page" x-init="$nextTick(() => { const checkLucide = () => { if (window.lucide) { lucide.createIcons(); } else { setTimeout(checkLucide, 50); } }; checkLucide(); })">
 
   <!-- ═══ Login Page ═════════════════════════════════════════ -->
   <template x-if="!$store.auth.isLoggedIn">
@@ -67,7 +67,7 @@
           </div>
           <div x-show="loginError" class="text-sm" style="color: #fb7185;" x-text="loginError"></div>
           <button type="submit" class="btn-primary w-full" :disabled="loginLoading">
-            <span x-show="!loginLoading">Sign In</span>
+    <div class="app-wrapper flex" x-init="$nextTick(() => { const checkLucide = () => { if (window.lucide) { lucide.createIcons(); } else { setTimeout(checkLucide, 50); } }; checkLucide(); })">
             <span x-show="loginLoading" class="flex items-center justify-center gap-2">
               <span class="spinner"></span> Signing in...
             </span>
